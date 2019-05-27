@@ -1,0 +1,14 @@
+Dear cloud service user,
+
+The following virtual machines in your computing project are on
+a server which has suffered a hardware fault:
+
+PROJECT-NAME
+LIST-OF-MACHINES
+
+The VMs have been relocated to another physical server and should
+again be accessible to you.
+
+
+Best regards,
+  The CSC Pouta team

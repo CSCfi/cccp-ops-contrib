@@ -1,0 +1,26 @@
+---
+sudo: false
+dist: trusty
+language: pylint
+env:
+  - PYLINT="latest"
+matrix:
+  allow_failures:
+    - env: PYLINT="latest"
+addons:
+  apt:
+    packages:
+      - aspell
+      - aspell-en
+install:
+  - travis_retry pip install --user pylint==1.7.5
+  - pylint --version
+script:
+  - FILES=$(find . -name "*.py" | grep -v "ci-scripts/")
+  - for i in $(echo $FILES); do echo $i; pylint $i; done
+  - TEMPLATES=$(find . -name '*template.txt*')
+   # the aspell parameters set: english language, utf-8 encoding, home dir and personal dictionary to exclude some technical terms
+   # we also ignore words with 3 or less characters.
+  - for t in $(echo $TEMPLATES); do echo $t; cat $t|aspell --lang=en --ignore 3 --encoding=utf-8 --home-dir=. --personal=.aspell.en.pws list; done
+  - READMES=$(find . -name '*README*')
+  - for t in $(echo $READMES); do echo $t; cat $t|aspell --lang=en --ignore 3 --encoding=utf-8 --home-dir=. --personal=.aspell.en.pws list; done

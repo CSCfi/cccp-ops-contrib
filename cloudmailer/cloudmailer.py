@@ -11,6 +11,7 @@
 # Jukka Nousiainen <jukka.nousiainen@csc.fi>
 
 import os
+import ConfigParser
 import sys
 import syslog
 import argparse
@@ -37,8 +38,10 @@ TEMPDIR = "temporary_files"
 HOST_SCHEDULE = "%s/host_schedule" % TEMPDIR
 HOST_GROUP_DEBUG = "%s/host_group_debug" % TEMPDIR
 AFFECTED_VMS = "%s/affected_vms" % TEMPDIR
-MAIL_FROM = "servicedesk@csc.fi"
-MAIL_SERVER = "smtp.csc.fi"
+MAIL_FROM = False
+MAIL_SERVER = False
+MAIL_BCC = False
+CONFIG_FILES = [ 'cloudmailer.cfg' , 'cloudmailer-example.cfg' ]
 
 # TODO make MAX_UPGRADE_AT_ONCE a flag
 MAX_UPGRADE_AT_ONCE = 10
@@ -48,7 +51,6 @@ START_TIME=time.time()
 def tt(text='text'):
    # Useful when benchmarking
    print str(time.time() - START_TIME) + ' ' + str(text)
-
 
 class OpenStackDataStorage():
 
@@ -213,6 +215,36 @@ class OpenStackDataStorage():
                     servers.append(server)
         return servers
 
+def readConfiguration():
+    global TEMPDIR, HOST_SCHEDULE, HOST_GROUP_DEBUG, AFFECTED_VMS,MAIL_FROM, MAIL_SERVER, MAIL_BCC, MAX_UPGRADE_AT_ONCE
+    config = ConfigParser.ConfigParser()
+    for f in CONFIG_FILES:
+        if os.path.isfile(f):
+            config.read(f)
+            if config.has_option('DEFAULT', 'TEMPDIR'):
+                TEMPDIR = config.get('DEFAULT', 'TEMPDIR')
+            if config.has_option('DEFAULT', 'HOST_SCHEDULE'):
+                HOST_SCHEDULE = config.get('DEFAULT', 'HOST_SCHEDULE')
+            if config.has_option('DEFAULT', 'HOST_GROUP_DEBUG'):
+                HOST_GROUP_DEBUG = config.get('DEFAULT', 'HOST_GROUP_DEBUG')
+            if config.has_option('DEFAULT', 'AFFECTED_VMS'):
+                AFFECTED_VMS = config.get('DEFAULT', 'AFFECTED_VMS')
+            if config.has_option('DEFAULT', 'MAIL_SERVER'):
+                MAIL_SERVER = config.get('DEFAULT', 'MAIL_SERVER')
+            if config.has_option('DEFAULT', 'MAIL_FROM'):
+                MAIL_FROM = config.get('DEFAULT', 'MAIL_FROM')
+            if config.has_option('DEFAULT', 'MAIL_BCC'):
+                MAIL_BCC = config.get('DEFAULT', 'MAIL_BCC')
+            if config.has_option('DEFAULT', 'MAX_UPGRADE_AT_ONCE'):
+               MAX_UPGRADE_AT_ONCE = config.get('DEFAULT', 'MAX_UPGRADE_AT_ONCE')
+            break
+
+    if (not TEMPDIR or not HOST_SCHEDULE or not AFFECTED_VMS or not MAIL_SERVER or not MAIL_FROM or not MAIL_BCC):
+        print( 'You need to set all variables, TEMPDIR=%s, HOST_GROUP_DEBUG=%s,'
+               ' AFFECTED_VMS=%s, HOST_SCHEDULE=%s, MAIL_SERVER=%s, MAIL_FROM=%s '
+               % (str(TEMPDIR), str(HOST_GROUP_DEBUG), str(AFFECTED_VMS), str(HOST_SCHEDULE), str(MAIL_SERVER), str(MAIL_FROM) ))
+        print("Reading configuration failed")
+        exit(2)
 
 def listFile(textfile):
     # Reads a file. Each line is returned as an entry.
@@ -460,7 +492,6 @@ def sendMails(send_emails, subject, template, projects):
 
     print str(len(projects)) + " projects to send email to."
     ask_for_verification = True
-
     smtpconn = smtplib.SMTP(MAIL_SERVER, 25)
 
     for project in projects.keys():
@@ -489,10 +520,10 @@ def sendMails(send_emails, subject, template, projects):
                 continue
 
         projmail.encode('utf-8')
-
+        emails_to = ",".join(projects[project]["emails"])
         emailcopy = open("%s/%s" %(TEMPDIR, projects[project]["name"]), "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
-        emailcopy.write("To: %s\n" % ",".join(projects[project]["emails"]))
+        emailcopy.write("To: %s\n" % emails_to)
         emailcopy.write("Subject: %s\n" % subject)
         emailcopy.write(projmail)
         emailcopy.close()
@@ -503,9 +534,17 @@ def sendMails(send_emails, subject, template, projects):
                 askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
                 ask_for_verification = False
             print "Really sending emails to: %s" % ",".join(projects[project]["emails"])
-            msg = MIMEText(projmail)
-            msg["Subject"] = subject
-            smtpconn.sendmail(MAIL_FROM, projects[project]["emails"], msg.as_string())
+            for email_address in projects[project]["emails"]:
+                msg = MIMEText(projmail)
+                msg["Subject"] = subject
+                msg["To"] = email_address
+                print (msg)
+                smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
+            if MAIL_BCC:
+                msg = MIMEText(projmail)
+                msg["Subject"] = subject
+                msg['To'] = emails_to
+                smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
 
     smtpconn.quit()
 
@@ -520,7 +559,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
 
-
+    readConfiguration()
     parser = argparse.ArgumentParser(description='Send mails about hypervisor/VM troubles.',
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
                                      epilog="""Examples:
@@ -565,7 +604,6 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
                         help='Minutes between the scheduled downtimes')
     parser.add_argument('--max', dest='max_upgrades_at_once', type=int, default=MAX_UPGRADE_AT_ONCE,
                         help='Maximum numbers of instances that will get upgraded at once, defualt: ' + str(MAX_UPGRADE_AT_ONCE) )
-
 
     args = parser.parse_args(argv[1:])
 

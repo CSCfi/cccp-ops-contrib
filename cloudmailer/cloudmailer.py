@@ -538,12 +538,13 @@ def sendMails(send_emails, subject, template, projects):
                 msg = MIMEText(projmail)
                 msg["Subject"] = subject
                 msg["To"] = email_address
-                print (msg)
+#                print(msg)
                 smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
             if MAIL_BCC:
-                msg = MIMEText(projmail)
-                msg["Subject"] = subject
-                msg['To'] = emails_to
+                msg = MIMEText("Mail sent to: " + emails_to + "\n------\n\n" + projmail)
+                msg["Subject"] = subject + " - " + projects[project]["name"]
+                msg['To'] = MAIL_BCC
+#                print(msg)
                 smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
 
     smtpconn.quit()

@@ -236,7 +236,7 @@ def readConfiguration():
             if config.has_option('DEFAULT', 'MAIL_BCC'):
                 MAIL_BCC = config.get('DEFAULT', 'MAIL_BCC')
             if config.has_option('DEFAULT', 'MAX_UPGRADE_AT_ONCE'):
-               MAX_UPGRADE_AT_ONCE = config.get('DEFAULT', 'MAX_UPGRADE_AT_ONCE')
+                MAX_UPGRADE_AT_ONCE = config.get('DEFAULT', 'MAX_UPGRADE_AT_ONCE')
             break
 
     if (not TEMPDIR or not HOST_SCHEDULE or not AFFECTED_VMS or not MAIL_SERVER or not MAIL_FROM or not MAIL_BCC):

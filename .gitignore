@@ -1,0 +1,5 @@
+*.swp
+cloudmailer/cloudmailer.cfg
+*.bak
+cloudmailer/temporary_files
+node-drainer/log_files/

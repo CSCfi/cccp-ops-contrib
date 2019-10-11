@@ -518,14 +518,13 @@ def sendMails(send_emails, subject, template, projects):
                     send_emails = False
                     print "Emails won't be sent because of exception"
                 continue
-
-        projmail.encode('utf-8')
+        projmail_utf8 = projmail.encode("utf-8","ignore")
         emails_to = ",".join(projects[project]["emails"])
         emailcopy = open("%s/%s" %(TEMPDIR, projects[project]["name"]), "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
         emailcopy.write("To: %s\n" % emails_to)
         emailcopy.write("Subject: %s\n" % subject)
-        emailcopy.write(projmail)
+        emailcopy.write(projmail_utf8)
         emailcopy.close()
 
 

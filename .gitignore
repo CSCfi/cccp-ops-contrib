@@ -2,4 +2,4 @@
 cloudmailer/cloudmailer.cfg
 *.bak
 cloudmailer/temporary_files
-node-drainer/
+node-drainer/log_files/

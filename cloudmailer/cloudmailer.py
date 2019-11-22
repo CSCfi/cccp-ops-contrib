@@ -443,7 +443,7 @@ def scheduleReboot(data,hostgroups, hostdict, starttime, interval):
     projects = {}
     hostboot = []
     # Ensure all host group lists are of even length, then schedule reboots.
-    for para in itertools.izip_longest(*hostgroups, fillvalue="skip"):
+    for para in itertools.zip_longest(*hostgroups, fillvalue="skip"):
         for host in para:
             if host == "skip":
                 continue

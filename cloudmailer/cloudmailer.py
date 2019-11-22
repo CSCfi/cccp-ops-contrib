@@ -542,7 +542,7 @@ def sendMails(send_emails, subject, template, projects):
     smtpconn.quit()
 
 def askToContinue(question, required_answer='Yes'):
-    answer = raw_input(question + ' Required answer: "' + required_answer + '"')
+    answer = input(question + ' Required answer: "' + required_answer + '"')
     if not required_answer == answer:
        print ("You did not write \"" + required_answer + "\". Exiting.")
        exit(0)

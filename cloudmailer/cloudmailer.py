@@ -30,8 +30,6 @@ import smtplib
 from email.mime.text import MIMEText
 
 import itertools
-import operator
-import copy
 from threading import Thread
 import time
 
@@ -74,8 +72,7 @@ class OpenStackDataStorage():
              self.project_dict[ project.id ] = project.name
         print("All Projects received")
 
-    def mapAffectedServersToRoleAssignments(self, hosts=None, instances=[]):
-        hypervisors=copy.copy(hosts)
+    def mapAffectedServersToRoleAssignments(self, hypervisors=None, instances=[]):
         affected_servers = []
         if instances:
             affected_servers = self.getVMsByID( instances )
@@ -375,7 +372,6 @@ def listVMsInHosts(data, hostgroups):
     # The function returns a list of dicts with VMs.
     hostdict = {}
     hostl = functools.reduce(lambda x,y: x+y, hostgroups)
-
     for host in hostl:
         if host != "":
             hostdict[host] = data.getServers(host)
@@ -398,7 +394,7 @@ def notifyVMOwnerProjectMembers(data, hostgroups, hostdict):
     # Writes a notify message for the hosts
     # This will return a dictionary of projects that contains what server name and server id
 
-    hostl = functools.reduce(operator.add, hostgroups)
+    hostl = functools.reduce(lambda x,y: x+y, hostgroups)
     projects = {}
 
     for host in hostl:
@@ -626,7 +622,7 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
             print ("Error opening hostfile %s" % args.hypervisors )
             return 1
         data = OpenStackDataStorage()
-        data.mapAffectedServersToRoleAssignments(list(hosts))
+        data.mapAffectedServersToRoleAssignments(hosts)
         # Generate a list of batches of nodes to be rebooted
         node_batch_list = getBatchList(data, hosts, args.max_upgrades_at_once)
         # Transpose + pad

@@ -10,8 +10,9 @@
 # Oscar Kraemer <oscar.kraemer@csc.fi>
 # Jukka Nousiainen <jukka.nousiainen@csc.fi>
 
+import functools
 import os
-import ConfigParser
+import configparser
 import sys
 import syslog
 import argparse
@@ -50,7 +51,7 @@ START_TIME=time.time()
 
 def tt(text='text'):
    # Useful when benchmarking
-   print str(time.time() - START_TIME) + ' ' + str(text)
+   print (str(time.time() - START_TIME) + ' ' + str(text))
 
 class OpenStackDataStorage():
 
@@ -73,13 +74,15 @@ class OpenStackDataStorage():
              self.project_dict[ project.id ] = project.name
         print("All Projects received")
 
-    def mapAffectedServersToRoleAssignments(self, hypervisors=None, instances=[]):
+    def mapAffectedServersToRoleAssignments(self, hosts=None, instances=[]):
+        hypervisors=copy.copy(hosts)
         affected_servers = []
         if instances:
             affected_servers = self.getVMsByID( instances )
         else:
             # First map unlist a list of list. Second map get all affected instances.
-            map( affected_servers.extend, map(self.getServers, hypervisors) )
+            print(list(map(str, hypervisors)))
+            list(map( affected_servers.extend, map(self.getServers, hypervisors) ))
         self.all_assignments = self.getRoleAssignments(vms=affected_servers)
 
     def mapAffectedProjectsToRoleAssignments(self, projectnames):
@@ -104,9 +107,9 @@ class OpenStackDataStorage():
         if 'OS_TENANT_ID' in os.environ:
             cred['project_id'] = os.environ.get('OS_TENANT_ID')
         cred['user_domain_name'] = os.environ.get('OS_USER_DOMAIN_NAME', 'default')
-        for key in cred.iterkeys():
+        for key in cred:
             if not cred[key]:
-                print 'Credentials not loaded to environment: did you load the rc file?'
+                print('Credentials not loaded to environment: did you load the rc file?')
                 exit(1)
         return cred
 
@@ -117,20 +120,27 @@ class OpenStackDataStorage():
         return None
 
     def getProjectRoleAssignmentThread(self, keystone_v3, tenant_assignments , tenant_id, i ):
+        print(str(tenant_id))
+        print ("hello2")
         try:
             tenant_assignments[i] = keystone_v3.role_assignments.list(project=tenant_id, effective=True)
         except Exception as e:
             # Some thread failed when this excpet wasn't here
             tenant_assignments[i] = keystone_v3.role_assignments.list(project=tenant_id, effective=True)
+            print(str(tenant_assignments[i]))
 
     def getRoleAssignments(self, vms=None, projects=None):
         # By threading this the script runtime decreased from 5:30 to 0:46 when scheduling half of cPouta
         # Before threading the runtime increased about 2 seconds per instance.
         project_set = set()
 
+        print('server')
+        print(vms)
+        print(projects)
         if vms:
             for server in vms:
                 project_set.add(server._info['tenant_id'])
+                print(server._info['tenant_id'])
 
         elif projects:
             for project_id in projects:
@@ -140,7 +150,7 @@ class OpenStackDataStorage():
         result_list = [None] * len(project_set)
 
         print('Start requesting Project Role Assignments')
-
+        print(project_set)
         for i, tenant_id in zip(range(len(project_set)), list(project_set)):
             thread_list[i] = Thread( target=self.getProjectRoleAssignmentThread,
                                      args=(self.keystone_v3, result_list, tenant_id, i ) )
@@ -150,7 +160,8 @@ class OpenStackDataStorage():
              t.join()
         print('Role Assignments received')
         all_assignments = []
-        map(all_assignments.extend,filter(None,result_list))
+        print(result_list)
+        list(map(all_assignments.extend,filter(None,result_list)))
         return all_assignments
 
     def getRoleAssignment(self, project):
@@ -183,18 +194,19 @@ class OpenStackDataStorage():
         users = []
 
         if tenant_id is None:
-            print "Undefined input project ID while retrieving project data! Possibly trying to retrieve project data from the wrong domain."
+            print ("Undefined input project ID while retrieving project data! Possibly trying to retrieve project data from the wrong domain.")
             return {"name": None, "emails": emails, "servers": []}
-
+        print(str(tenant_id))
         users = self.getRoleAssignment(tenant_id)
-
         for user in users:
+            print("hello")
+            print(str(user))
             email = self.getUserEmail(user)
             if email:
                 emails.append(email)
 
         if len(emails) == 0:
-            print tenant_id + " does not have any emails"
+            print(tenant_id + " does not have any emails")
 
         name = self.getProjectName(tenant_id)
         project = {"name": name, "emails": emails, "servers": []}
@@ -217,7 +229,7 @@ class OpenStackDataStorage():
 
 def readConfiguration():
     global TEMPDIR, HOST_SCHEDULE, HOST_GROUP_DEBUG, AFFECTED_VMS,MAIL_FROM, MAIL_SERVER, MAIL_BCC, MAX_UPGRADE_AT_ONCE
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     for f in CONFIG_FILES:
         if os.path.isfile(f):
             config.read(f)
@@ -249,7 +261,7 @@ def readConfiguration():
 def listFile(textfile):
     # Reads a file. Each line is returned as an entry.
     lfile = open(textfile, "r")
-    items = map(str.strip, lfile.readlines())
+    items = list(map(str.strip, lfile.readlines()))
     lfile.close()
     return items
 
@@ -257,12 +269,15 @@ def getServergroupsAndVms(data,nodelist):
 
     nodes = {}
     servergroups = {}
-
+    print('nodelist: ' + str(list(map(str,nodelist))))
     for node in nodelist:
         nodes[node] = []
+        print('node: ' + str(node))
 
     allservers = data.all_servers
     server_groups = data.all_server_groups
+    print("allservers: " + str(allservers))
+    print("server_groups: " + str(server_groups))
 
 
     # Generates a servergroup/hypervisor <-> servergroup/instance mapping.
@@ -279,6 +294,7 @@ def getServergroupsAndVms(data,nodelist):
                 nodes[host].append(group.id)
         if len(grouphosts) > 0:
             servergroups[group.id] = grouphosts
+    print("nodes2: " + str(nodes))
     return (nodes, servergroups)
 
 def getProjectsAndVms(data, nodelist):
@@ -318,6 +334,8 @@ def getHypervisorWithMostGroups(nodes):
 
 def getNodeWithoutGroups(groups, local_nodes):
 # For finding a node for the batch that does only have new groups.
+    print("group: " + str(groups))
+    print("local_nodes: " + str(local_nodes))
     while True:
         temp_node = getHypervisorWithMostGroups(local_nodes)
         if temp_node == 0:
@@ -332,8 +350,10 @@ def getNodeWithoutGroups(groups, local_nodes):
         local_nodes.pop(temp_node, None)
 
 def getBatchList(data, hosts, max_upgrades_at_once):
+    print(str(hosts))
     (nodes, servergroups) = getServergroupsAndVms(data, hosts)
-
+    print("nodes: " + str(nodes))
+    print("servergroups: " + str(servergroups))
     remaining_nodes = dict(nodes)
     groups_in_batch = []
     node_batch = []
@@ -341,7 +361,10 @@ def getBatchList(data, hosts, max_upgrades_at_once):
     while True:
         # Every iteration tries to find a new instance to add to the current batch.
         # If there is no match, the batch is added to node_batch_list
+        print("groups_in_batch: " + str(groups_in_batch))
+        print("remaining_nodes: " + str(remaining_nodes))
         node = getNodeWithoutGroups(list(groups_in_batch), dict(remaining_nodes))
+        print("Node:" + str(node))
         if len(node_batch) == 0 and node == 0:
         # Found all nodes
             break
@@ -360,7 +383,7 @@ def getBatchList(data, hosts, max_upgrades_at_once):
 
 # Convert to matrix based on longest entry, then transpose
 def nodeBatchListToHostGroups(node_batch_list):
-    return list(map(list, itertools.izip_longest(*node_batch_list, fillvalue="skip")))
+    return list(map(list, itertools.zip_longest(*node_batch_list, fillvalue="skip")))
 
 # For outputting the node list generated by parser.py to a file for verification
 # and/or debug purposes.
@@ -377,7 +400,10 @@ def listVMsInHosts(data, hostgroups):
     # The virtual machines on the hosts are looked up.
     # The function returns a list of dicts with VMs.
     hostdict = {}
-    hostl = reduce(operator.add, hostgroups)
+    print('hello')
+    print(str(hostgroups))
+    print(type(hostgroups)) 
+    hostl = functools.reduce(lambda x,y: x+y, hostgroups)
 
     for host in hostl:
         if host != "":
@@ -401,7 +427,7 @@ def notifyVMOwnerProjectMembers(data, hostgroups, hostdict):
     # Writes a notify message for the hosts
     # This will return a dictionary of projects that contains what server name and server id
 
-    hostl = reduce(operator.add, hostgroups)
+    hostl = functools.reduce(operator.add, hostgroups)
     projects = {}
 
     for host in hostl:
@@ -490,13 +516,13 @@ def scheduleReboot(data,hostgroups, hostdict, starttime, interval):
 
 def sendMails(send_emails, subject, template, projects):
 
-    print str(len(projects)) + " projects to send email to."
+    print(str(len(projects)) + " projects to send email to.")
     ask_for_verification = True
     smtpconn = smtplib.SMTP(MAIL_SERVER, 25)
 
     for project in projects.keys():
         if len("".join(projects[project]["emails"])) == 0:
-            print "Project %s has no email recipients. PLEASE NOTE that this project will not receive any email!" % projects[project]["name"]
+            print("Project %s has no email recipients. PLEASE NOTE that this project will not receive any email!" % projects[project]["name"])
             continue
 
         projmail = ""
@@ -511,20 +537,20 @@ def sendMails(send_emails, subject, template, projects):
                 else:
                     projmail = projmail + line
             except Exception as e:
-                print "There was an issue with this project:"
+                print ("There was an issue with this project:")
                 pprint.pprint(projects[project])
-                print e
+                print( e )
                 if send_emails:
                     send_emails = False
-                    print "Emails won't be sent because of exception"
+                    print( "Emails won't be sent because of exception")
                 continue
-        projmail_utf8 = projmail.encode("utf-8","ignore")
+        #projmail_utf8 = projmail.encode("utf-8","ignore")
         emails_to = ",".join(projects[project]["emails"])
         emailcopy = open("%s/%s" %(TEMPDIR, projects[project]["name"]), "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
         emailcopy.write("To: %s\n" % emails_to)
         emailcopy.write("Subject: %s\n" % subject)
-        emailcopy.write(projmail_utf8)
+        emailcopy.write(projmail)
         emailcopy.close()
 
 
@@ -532,7 +558,7 @@ def sendMails(send_emails, subject, template, projects):
             if ask_for_verification:
                 askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
                 ask_for_verification = False
-            print "Really sending emails to: %s" % ",".join(projects[project]["emails"])
+            print ("Really sending emails to: %s" % ",".join(projects[project]["emails"]))
             for email_address in projects[project]["emails"]:
                 msg = MIMEText(projmail)
                 msg["Subject"] = subject
@@ -551,7 +577,7 @@ def sendMails(send_emails, subject, template, projects):
 def askToContinue(question, required_answer='Yes'):
     answer = raw_input(question + ' Required answer: "' + required_answer + '"')
     if not required_answer == answer:
-       print "You did not write \"" + required_answer + "\". Exiting."
+       print ("You did not write \"" + required_answer + "\". Exiting.")
        exit(0)
 
 def main(argv=None):
@@ -608,7 +634,7 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
     args = parser.parse_args(argv[1:])
 
     if args.schedule and not args.date:
-        print "When scheduling you need to also set a --date"
+        print ("When scheduling you need to also set a --date")
         return 22
 
     if not os.path.exists(TEMPDIR):
@@ -619,34 +645,46 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
         template = templf.readlines()
         templf.close()
     except IOError:
-        print "Error opening template file %s. It needs to be a path to a file" % args.template
+        print ("Error opening template file %s. It needs to be a path to a file" % args.template)
         return 1
 
     if args.hypervisors:
         try:
             hosts = listFile(args.hypervisors)
-
+            print('hostsxx: ' + str(hosts))
+            print('hostsx: ' + str(list(hosts)))
         except IOError:
-            print "Error opening hostfile %s" % args.hypervisors
+            print ("Error opening hostfile %s" % args.hypervisors )
             return 1
+        print('hostsx: ' + str(list(hosts)))
+        print('hostsx: ' + str(list(map(str,hosts))))
+        print('hostsx: ' + str(list(map(str,hosts))))
         data = OpenStackDataStorage()
-        data.mapAffectedServersToRoleAssignments(hosts)
+        print('hostsx: ' + str(list(map(str,hosts))))
+        data.mapAffectedServersToRoleAssignments(list(hosts))
+        print('hostsx: ' + str(list(map(str,hosts))))
         # Generate a list of batches of nodes to be rebooted
+        print('hostsx: ' + str(list(map(str,hosts))))
+        print('jelllll')
+        print('hostsx: ' + str(list(map(str,hosts))))
         node_batch_list = getBatchList(data, hosts, args.max_upgrades_at_once)
+        print(list(map(str,node_batch_list)))
+        print('suclk')
         # Transpose + pad
         hostgroups = nodeBatchListToHostGroups(node_batch_list)
+        print(node_batch_list)
         # Write intermediary scheduling result to a file
         hostGroupsToFile(hostgroups)
         vms = listVMsInHosts(data,hostgroups)
 
     if args.vms:
         if args.schedule:
-            print "Cloudmailer does not currently support scheduling downtime on a VM basis. Only hypervisor based downtimes can be scheduled."
+            print ("Cloudmailer does not currently support scheduling downtime on a VM basis. Only hypervisor based downtimes can be scheduled.")
             return 1
         try:
             vmids = listFile(args.vms)
         except IOError:
-            print "Error opening vmfile %s" % args.vms
+            print ("Error opening vmfile %s" % args.vms)
             return 1
         data = OpenStackDataStorage()
         data.mapAffectedServersToRoleAssignments(instances=vmids)
@@ -655,7 +693,7 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
 
     if args.projects:
         if args.schedule:
-            print "Cloudmailer does not currently support scheduling downtime on a project basis. Only hypervisor based downtimes can be scheduled."
+            print ("Cloudmailer does not currently support scheduling downtime on a project basis. Only hypervisor based downtimes can be scheduled.")
             return 1
         try:
             projectnames = listFile(args.projects)
@@ -666,14 +704,14 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
             sendMails(args.sendemail, args.mailsubject, template, mails)
             exit(0)
         except IOError:
-            print "Error opening projectfile %s" % args.projects
+            print ("Error opening projectfile %s" % args.projects)
             return 1
 
     if args.schedule:
         try:
             starttime = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
         except ValueError:
-            print 'Starttime %s does not match the format %Y-%m-%d %H:%M'
+            print ('Starttime %s does not match the format %Y-%m-%d %H:%M')
             return 1
     writeAffectedVMs(vms)
     # Generate emails

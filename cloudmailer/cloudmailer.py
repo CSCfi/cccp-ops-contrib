@@ -81,7 +81,6 @@ class OpenStackDataStorage():
             affected_servers = self.getVMsByID( instances )
         else:
             # First map unlist a list of list. Second map get all affected instances.
-            print(list(map(str, hypervisors)))
             list(map( affected_servers.extend, map(self.getServers, hypervisors) ))
         self.all_assignments = self.getRoleAssignments(vms=affected_servers)
 
@@ -120,27 +119,20 @@ class OpenStackDataStorage():
         return None
 
     def getProjectRoleAssignmentThread(self, keystone_v3, tenant_assignments , tenant_id, i ):
-        print(str(tenant_id))
-        print ("hello2")
         try:
             tenant_assignments[i] = keystone_v3.role_assignments.list(project=tenant_id, effective=True)
         except Exception as e:
             # Some thread failed when this excpet wasn't here
             tenant_assignments[i] = keystone_v3.role_assignments.list(project=tenant_id, effective=True)
-            print(str(tenant_assignments[i]))
 
     def getRoleAssignments(self, vms=None, projects=None):
         # By threading this the script runtime decreased from 5:30 to 0:46 when scheduling half of cPouta
         # Before threading the runtime increased about 2 seconds per instance.
         project_set = set()
 
-        print('server')
-        print(vms)
-        print(projects)
         if vms:
             for server in vms:
                 project_set.add(server._info['tenant_id'])
-                print(server._info['tenant_id'])
 
         elif projects:
             for project_id in projects:
@@ -150,7 +142,6 @@ class OpenStackDataStorage():
         result_list = [None] * len(project_set)
 
         print('Start requesting Project Role Assignments')
-        print(project_set)
         for i, tenant_id in zip(range(len(project_set)), list(project_set)):
             thread_list[i] = Thread( target=self.getProjectRoleAssignmentThread,
                                      args=(self.keystone_v3, result_list, tenant_id, i ) )
@@ -160,7 +151,6 @@ class OpenStackDataStorage():
              t.join()
         print('Role Assignments received')
         all_assignments = []
-        print(result_list)
         list(map(all_assignments.extend,filter(None,result_list)))
         return all_assignments
 
@@ -196,11 +186,8 @@ class OpenStackDataStorage():
         if tenant_id is None:
             print ("Undefined input project ID while retrieving project data! Possibly trying to retrieve project data from the wrong domain.")
             return {"name": None, "emails": emails, "servers": []}
-        print(str(tenant_id))
         users = self.getRoleAssignment(tenant_id)
         for user in users:
-            print("hello")
-            print(str(user))
             email = self.getUserEmail(user)
             if email:
                 emails.append(email)
@@ -269,15 +256,11 @@ def getServergroupsAndVms(data,nodelist):
 
     nodes = {}
     servergroups = {}
-    print('nodelist: ' + str(list(map(str,nodelist))))
     for node in nodelist:
         nodes[node] = []
-        print('node: ' + str(node))
 
     allservers = data.all_servers
     server_groups = data.all_server_groups
-    print("allservers: " + str(allservers))
-    print("server_groups: " + str(server_groups))
 
 
     # Generates a servergroup/hypervisor <-> servergroup/instance mapping.
@@ -294,7 +277,6 @@ def getServergroupsAndVms(data,nodelist):
                 nodes[host].append(group.id)
         if len(grouphosts) > 0:
             servergroups[group.id] = grouphosts
-    print("nodes2: " + str(nodes))
     return (nodes, servergroups)
 
 def getProjectsAndVms(data, nodelist):
@@ -334,8 +316,6 @@ def getHypervisorWithMostGroups(nodes):
 
 def getNodeWithoutGroups(groups, local_nodes):
 # For finding a node for the batch that does only have new groups.
-    print("group: " + str(groups))
-    print("local_nodes: " + str(local_nodes))
     while True:
         temp_node = getHypervisorWithMostGroups(local_nodes)
         if temp_node == 0:
@@ -350,10 +330,7 @@ def getNodeWithoutGroups(groups, local_nodes):
         local_nodes.pop(temp_node, None)
 
 def getBatchList(data, hosts, max_upgrades_at_once):
-    print(str(hosts))
     (nodes, servergroups) = getServergroupsAndVms(data, hosts)
-    print("nodes: " + str(nodes))
-    print("servergroups: " + str(servergroups))
     remaining_nodes = dict(nodes)
     groups_in_batch = []
     node_batch = []
@@ -361,10 +338,7 @@ def getBatchList(data, hosts, max_upgrades_at_once):
     while True:
         # Every iteration tries to find a new instance to add to the current batch.
         # If there is no match, the batch is added to node_batch_list
-        print("groups_in_batch: " + str(groups_in_batch))
-        print("remaining_nodes: " + str(remaining_nodes))
         node = getNodeWithoutGroups(list(groups_in_batch), dict(remaining_nodes))
-        print("Node:" + str(node))
         if len(node_batch) == 0 and node == 0:
         # Found all nodes
             break
@@ -400,9 +374,6 @@ def listVMsInHosts(data, hostgroups):
     # The virtual machines on the hosts are looked up.
     # The function returns a list of dicts with VMs.
     hostdict = {}
-    print('hello')
-    print(str(hostgroups))
-    print(type(hostgroups)) 
     hostl = functools.reduce(lambda x,y: x+y, hostgroups)
 
     for host in hostl:
@@ -651,28 +622,15 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
     if args.hypervisors:
         try:
             hosts = listFile(args.hypervisors)
-            print('hostsxx: ' + str(hosts))
-            print('hostsx: ' + str(list(hosts)))
         except IOError:
             print ("Error opening hostfile %s" % args.hypervisors )
             return 1
-        print('hostsx: ' + str(list(hosts)))
-        print('hostsx: ' + str(list(map(str,hosts))))
-        print('hostsx: ' + str(list(map(str,hosts))))
         data = OpenStackDataStorage()
-        print('hostsx: ' + str(list(map(str,hosts))))
         data.mapAffectedServersToRoleAssignments(list(hosts))
-        print('hostsx: ' + str(list(map(str,hosts))))
         # Generate a list of batches of nodes to be rebooted
-        print('hostsx: ' + str(list(map(str,hosts))))
-        print('jelllll')
-        print('hostsx: ' + str(list(map(str,hosts))))
         node_batch_list = getBatchList(data, hosts, args.max_upgrades_at_once)
-        print(list(map(str,node_batch_list)))
-        print('suclk')
         # Transpose + pad
         hostgroups = nodeBatchListToHostGroups(node_batch_list)
-        print(node_batch_list)
         # Write intermediary scheduling result to a file
         hostGroupsToFile(hostgroups)
         vms = listVMsInHosts(data,hostgroups)

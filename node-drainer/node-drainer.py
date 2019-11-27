@@ -60,9 +60,9 @@ def getGredentials():
     if 'OS_TENANT_ID' in os.environ:
         cred['project_id'] = os.environ.get('OS_TENANT_ID')
     cred['user_domain_name'] = os.environ.get('OS_USER_DOMAIN_NAME', 'default')
-    for key in cred.iterkeys():
+    for key in cred:
         if not cred[key]:
-            print timeStr() + 'Credentials not loaded to environment: did you load the rc file?'
+            print(timeStr() + 'Credentials not loaded to environment: did you load the rc file?')
             exit(1)
     return cred
 

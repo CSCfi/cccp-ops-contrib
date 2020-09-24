@@ -255,31 +255,77 @@ def listFile(textfile):
     lfile.close()
     return items
 
+# getServergroupsAndVms
+#
+# The function creates two maps, nodes and servergroups
+# For each node, the map nodes describes the list of server groups which have at least one server hosted in the node.
+# For each server group, the map servergroups describes the list of nodes which host at least one server of the server group.
+#
+# input
+# data: information about the Openstack platform retrieved from API call
+# nodelist: list of nodes we obtained in input
+#
+# output
+# nodes: dict containing [node->list of server groups] mappings
+# servergroups: dict containing [server group->list of nodes] mappings
 def getServergroupsAndVms(data,nodelist):
-
+    # create empty nodes map
     nodes = {}
+    # create empty servergroups map
     servergroups = {}
+    # for each of the nodes we have received in input
     for node in nodelist:
+        # prepare an empty list of server groups for the node
         nodes[node] = []
 
+    # allservers is a collection containing all the servers in the Openstack platform
     allservers = data.all_servers
+    # server_groups is a collection containing all the server groups in the Openstack platform
     server_groups = data.all_server_groups
 
-
     # Generates a servergroup/hypervisor <-> servergroup/instance mapping.
+    #
+    # for each group in the server groups
     for group in server_groups:
+        # prepare an empty list, which will contain the nodes hosting the servers of the server group
         grouphosts = []
+        # for each of the servers in the server group
         for member in group.members:
+            # initialize a flag that tells if we found the server in the list of servers given by the Openstack platform
+            server_found = False
+            # initialize the variable that will contain the node where the server is being hosted
+            host = None
+            # for each of the servers in the Openstack platform
             for server in allservers:
+                # if it corresponds to the server of the server group
                 if server.id == member:
+                    # set the flag to true               
+                    server_found = True
+                    # obtain the node in which the server is hosted
                     host = getattr(server, "OS-EXT-SRV-ATTR:host")
+                    # exit from the closest for-loop because our lookup is terminated
                     break
-            if host in nodes:
-                #Just handle hypervisors we're maintaining
-                grouphosts.append(host)
-                nodes[host].append(group.id)
+            # if the server in the server group is in the list of the servers given by the Openstack platform
+            if(server_found == True):
+                # if the node in which the virtual machine is hosted is one of the nodes in input
+                if host in nodes:
+                    #Just handle hypervisors we're maintaining
+                    #
+                    # add the node to the list of nodes hosting at least one server of the server group
+                    grouphosts.append(host)
+                    # add the server group to the list of server groups which have at least one server hosted in the node
+                    nodes[host].append(group.id)
+            #else:
+                # this is one of the cases in which the server group has still members that have already been deleted
+                # these cases started to appear after Queens upgrade
+                #
+                #print("The virtual machine " + str(member) + " of the group " + str(group) + "is not contained in data.all_servers")
+                #
+        # if there is at least one node hosting servers of the server group
         if len(grouphosts) > 0:
+            # add the list of nodes to the map servergroups, using the server group as the key
             servergroups[group.id] = grouphosts
+    # provide the two maps obtained in output
     return (nodes, servergroups)
 
 def getProjectsAndVms(data, nodelist):

@@ -269,13 +269,9 @@ def listFile(textfile):
 # nodes: dict containing [node->list of server groups] mappings
 # servergroups: dict containing [server group->list of nodes] mappings
 def getServergroupsAndVms(data,nodelist):
-    # create empty nodes map
     nodes = {}
-    # create empty servergroups map
     servergroups = {}
-    # for each of the nodes we have received in input
     for node in nodelist:
-        # prepare an empty list of server groups for the node
         nodes[node] = []
 
     # allservers is a collection containing all the servers in the Openstack platform
@@ -284,22 +280,15 @@ def getServergroupsAndVms(data,nodelist):
     server_groups = data.all_server_groups
 
     # Generates a servergroup/hypervisor <-> servergroup/instance mapping.
-    #
-    # for each group in the server groups
     for group in server_groups:
         # prepare an empty list, which will contain the nodes hosting the servers of the server group
         grouphosts = []
-        # for each of the servers in the server group
         for member in group.members:
             # initialize a flag that tells if we found the server in the list of servers given by the Openstack platform
             server_found = False
-            # initialize the variable that will contain the node where the server is being hosted
             host = None
-            # for each of the servers in the Openstack platform
             for server in allservers:
-                # if it corresponds to the server of the server group
-                if server.id == member:
-                    # set the flag to true               
+                if server.id == member:             
                     server_found = True
                     # obtain the node in which the server is hosted
                     host = getattr(server, "OS-EXT-SRV-ATTR:host")

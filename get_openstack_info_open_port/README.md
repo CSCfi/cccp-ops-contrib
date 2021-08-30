@@ -10,12 +10,19 @@ Check the requirements.txt file for Python modules required. They will be instal
 
 ### Linux
 
-  `sudo python3 setup.py install`
+  `install.sh`
 
 ### Windows (from PowerShell)
 
-  `& $(where.exe python).split()[0] setup.py install`
+This has NOT been tested.
+
+  ```
+  $python_exe = $(where.exe python).split()[0]
+  & $python_exe -m pip upgrade
+  & $python_exe -m pip install setuptools-rust
+  & $python_exe setup.py install
+  ```
 
 ## Usage
 
-  `get_openstack_info_open_port.py [--debug-level|-d CRITICAL|ERROR|WARNING|INFO|DEBUG|NOTSET] --ip|-i IP_ADDRESS --port|-p PORT`
+  `get_openstack_info_open_port.py --ip|-i IP_ADDRESS --port|-p PORT [--protocol|-t TCP|UDP|ICMP] [--method|-m IP|INSTANCE] [--log-file|-l LOG_FILE] [--debug-level|-d CRITICAL|ERROR|WARNING|INFO|DEBUG|NOTSET] [--config CONFIG_FILE]`

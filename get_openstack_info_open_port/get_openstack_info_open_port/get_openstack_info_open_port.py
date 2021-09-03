@@ -132,8 +132,6 @@ class get_openstack_info_open_port:
             if port_range_max is not None and port_range_min is not None and port_range_max <= self.port  and port_range_min >= self.port:
                 self._log.warn(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
                 self.rule_found = True
-            else:
-                print('no match')
         
     def _test_open_port(self, ip, port, protocol):
         if protocol == 'TCP':

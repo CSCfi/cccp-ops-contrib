@@ -52,7 +52,7 @@ def jprint(object):
     
 class get_openstack_info_open_port:
 
-    def __init__(self, debug_level, log_file, ip, port, method, protocol):
+    def __init__(self, debug_level, log_file, ip, port, method, protocol, skip_port_check):
         ''' Initial function called when object is created '''
         self.config = dict()
         self.config['debug_level'] = debug_level
@@ -73,7 +73,7 @@ class get_openstack_info_open_port:
             self.rule_found = False
             if self._check_known_ip():
                 self._log.debug(f"IP found in your environment. Testing that '{self.ip} {self.protocol}/{self.port}' is actually open...")
-                if self._test_open_port(self.ip, self.port, self.protocol):
+                if skip_port_check or self._test_open_port(self.ip, self.port, self.protocol):
                     self._log.info(f"Port '{self.port}' reachable.")
                     self._check_openstack()
                     if method == 'IP':
@@ -302,10 +302,10 @@ def validate_global_ip(ctx, param, value):
                 ["tcp", "udp", "icmp"],
                 case_sensitive=False,
               ),default='tcp', help='Protocol of the port.')
-#@click.option("--dummy","-n" is_flag=True, help="Don't do anything, just show what would be done.") # Don't forget to add dummy to parameters of main function
+@click.option("--skip-port-check","-s", is_flag=True, help="Don't check if the port is actually open.")
 @click_config_file.configuration_option()
-def __main__(debug_level, log_file, ip, port, method, protocol):
-    object = get_openstack_info_open_port(debug_level, log_file, ip, port, method, protocol)
+def __main__(debug_level, log_file, ip, port, method, protocol, skip_port_check):
+    object = get_openstack_info_open_port(debug_level, log_file, ip, port, method, protocol, skip_port_check)
     
 
 if __name__ == "__main__":

@@ -65,7 +65,7 @@ class get_openstack_info_open_port:
         self._os_auth()
         self.all_floating_ips = self.neutron.list_floatingips(floating_ip_address=self.ip)['floatingips']
         self._log.debug(f"Found {len(self.all_floating_ips)} floating IP.")
-        if protocol == 'ICMP':
+        if self.protocol == 'icmp':
             lport = list()
             lport.append(port[0])
             port = lport
@@ -121,20 +121,30 @@ class get_openstack_info_open_port:
 
     def _check_security_group_rules(self, security_group_rules):
         for rule in security_group_rules:
-            remote_ip_prefix = rule.get('remote_ip_prefix', '')
-            if rule.get('direction', '') != 'ingress' or not remote_ip_prefix:
-                continue
-            netmask = remote_ip_prefix.split("/")[1]
-            if netmask != '0':
-                continue
-            port_range_max = rule.get('port_range_max', 0) 
-            port_range_min = rule.get('port_range_min', 0)  
-            if port_range_max is not None and port_range_min is not None and port_range_max <= self.port  and port_range_min >= self.port:
-                self._log.warn(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
-                self.rule_found = True
+                if self.protocol != rule['protocol']:
+                    self._log.debug(f"Not matching rule due to protocol not equal '{self.protocol}': {json.dumps(rule, indent=2)}")
+                    continue
+                remote_ip_prefix = rule.get('remote_ip_prefix', '')
+                if rule.get('direction', '') != 'ingress':
+                    self._log.debug(f"Not matching rule due to direction: {json.dumps(rule, indent=2)}")
+                    continue
+                if not remote_ip_prefix:
+                    self._log.debug(f"Not matching rule due to remote IP: {json.dumps(rule, indent=2)}")
+                    continue                    
+                netmask = remote_ip_prefix.split("/")[1]
+                if netmask != '0':
+                    continue
+                port_range_max = rule.get('port_range_max', 0) 
+                port_range_min = rule.get('port_range_min', 0)  
+                if (port_range_max is None and port_range_min is None) or (port_range_max <= self.port  and port_range_min >= self.port):
+                    self._log.warn(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
+                    self._log.debug(f"Matching rule: {json.dumps(rule, indent=2)}")
+                    self.rule_found = True
+                else:
+                    self._log.debug(f"Not matching rule due to port: {json.dumps(rule, indent=2)}")
         
     def _test_open_port(self, ip, port, protocol):
-        if protocol == 'TCP':
+        if protocol == 'tcp':
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(10)
             result = sock.connect_ex((ip, port))
@@ -143,10 +153,10 @@ class get_openstack_info_open_port:
                 return True
             else:
                 return False
-        elif protocol == 'UDP':
+        elif protocol == 'udp':
             self._log.debug("UDP is not connection oriented so it's not possible to scan and trust the result, so we assume is open.")
             return True
-        elif protocol == 'ICMP':
+        elif protocol == 'icmp':
             try:
                 sock = ping(ip, privileged=False)
             except:
@@ -289,9 +299,9 @@ def validate_global_ip(ctx, param, value):
               ),default='IP', help='Method used to find the security group rule.')
 @click.option('--protocol', '-t',
               type=click.Choice(
-                ["TCP", "UDP", "ICMP"],
+                ["tcp", "udp", "icmp"],
                 case_sensitive=False,
-              ),default='TCP', help='Protocol of the port.')
+              ),default='tcp', help='Protocol of the port.')
 #@click.option("--dummy","-n" is_flag=True, help="Don't do anything, just show what would be done.") # Don't forget to add dummy to parameters of main function
 @click_config_file.configuration_option()
 def __main__(debug_level, log_file, ip, port, method, protocol):

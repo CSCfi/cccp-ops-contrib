@@ -137,7 +137,7 @@ class get_openstack_info_open_port:
                 port_range_max = rule.get('port_range_max', 0) 
                 port_range_min = rule.get('port_range_min', 0)  
                 if (port_range_max is None and port_range_min is None) or (port_range_max <= self.port  and port_range_min >= self.port):
-                    self._log.warn(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
+                    self._log.warning(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
                     self._log.debug(f"Matching rule: {json.dumps(rule, indent=2)}")
                     self.rule_found = True
                 else:

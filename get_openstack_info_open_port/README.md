@@ -4,6 +4,7 @@ This script will check that a given port in a given global (public) IP is open, 
 
 ## Requirements
 
+You will need Python3.
 Check the requirements.txt file for Python modules required. They will be installed following the installation instructions.
 
 ## Installation
@@ -19,7 +20,6 @@ This has NOT been tested.
   ```
   $python_exe = $(where.exe python).split()[0]
   & $python_exe -m pip upgrade
-  & $python_exe -m pip install setuptools-rust
   & $python_exe setup.py install
   ```
 

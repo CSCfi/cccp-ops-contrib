@@ -11,7 +11,7 @@ Check the requirements.txt file for Python modules required. They will be instal
 
 ### Linux
 
-  `install.sh`
+  `./install.sh`
 
 ### Windows (from PowerShell)
 

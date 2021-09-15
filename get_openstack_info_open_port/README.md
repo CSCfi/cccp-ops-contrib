@@ -20,6 +20,7 @@ This has NOT been tested.
   ```
   $python_exe = $(where.exe python).split()[0]
   & $python_exe -m pip upgrade
+  & $python_exe -m pip install setuptools_rust
   & $python_exe setup.py install
   ```
 

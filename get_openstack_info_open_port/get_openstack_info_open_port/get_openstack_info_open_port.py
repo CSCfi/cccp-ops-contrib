@@ -260,7 +260,7 @@ class get_openstack_info_open_port:
         else:
             home_folder = os.environ.get('HOME', os.environ.get('USERPROFILE', ''))
             log_folder = os.path.join(home_folder, "log")
-            log_file = os.path.join(log_folder, "get_openstack_info_open_port.log")skip_port_check
+            log_file = os.path.join(log_folder, "get_openstack_info_open_port.log")
 
         filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
         # create formatter

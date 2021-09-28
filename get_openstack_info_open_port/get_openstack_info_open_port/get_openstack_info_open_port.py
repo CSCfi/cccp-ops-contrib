@@ -96,15 +96,21 @@ class get_openstack_info_open_port:
         self.floatingip = self._get_openstack_floating_ip()
         self.project_id = self.floatingip['project_id']
         port_id = self.floatingip['port_id']
-        port = self.neutron.show_port(port_id)
-        self.server_id = port['port']['device_id']
-        server = self.nova.servers.get(self.server_id).to_dict()
-        self.server_name = server['name']
-        # The best solution to get the project name would be to call the Placement API with the ID, but there is no Python module ready yet
-        self.project_name = ', '.join(server['addresses'].keys())
-        port = self.neutron.show_port(self.floatingip['port_id'])['port']
-        for security_group in port['security_groups']:
-            self._check_security_group(security_group)      
+        if port_id is None:
+            self._log.info(f"The IP '{self.ip}' is not attached to a port.")
+        else:
+            self._log.debug(f"Obtained port id '{port_id}'")
+            port = self.neutron.show_port(port_id)
+            self.server_id = port['port']['device_id']
+            self._log.debug(f"Obtained server id '{self.server_id}'")
+            server = self.nova.servers.get(self.server_id).to_dict()
+            self.server_name = server['name']
+            self._log.debug(f"Obtained server name '{self.server_name}'")
+            # The best solution to get the project name would be to call the Placement API with the ID, but there is no Python module ready yet
+            self.project_name = ', '.join(server['addresses'].keys())
+            port = self.neutron.show_port(self.floatingip['port_id'])['port']
+            for security_group in port['security_groups']:
+                self._check_security_group(security_group)      
 
     def _check_with_instance_method(self):
         self._log.debug(f"Looking for instance with IP '{self.ip}' in OpenStack's region '{os.environ['OS_REGION_NAME']}' as user '{os.environ['OS_USERNAME']}' with port '{self.port}' open to incoming connections...")

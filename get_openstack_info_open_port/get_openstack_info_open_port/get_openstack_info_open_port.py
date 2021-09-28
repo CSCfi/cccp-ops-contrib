@@ -301,7 +301,7 @@ def validate_global_ip(ctx, param, value):
                 ["tcp", "udp", "icmp"],
                 case_sensitive=False,
               ),default='tcp', help='Protocol of the port.')
-@click.option("--scan-port","-s", is_flag=True, help="Don't check if the port is actually open.")
+@click.option("--scan-port","-s", is_flag=True, help="Do a port scan before checking for rules.")
 @click_config_file.configuration_option()
 def __main__(debug_level, log_file, ip, port, method, protocol, scan_port):
     object = get_openstack_info_open_port(debug_level, log_file, ip, port, method, protocol, scan_port)

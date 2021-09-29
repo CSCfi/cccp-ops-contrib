@@ -14,7 +14,7 @@ Cloud mailer can also send the mails based on VM or project UUIDs.
 
 ## Files
 
-Please see the templates/ directory for ready a template email.
+Please see the templates/ directory for already made template email.
 
 If you write new templates, any line with the following texts will be replaced.
 
@@ -56,3 +56,5 @@ Please run "python cloudmailer.py -h" for command help.
    This directory contains email template (just the message). It is a good idea
    to run ```aspell --check $FILENAME``` against all template changes so that there
    is less chance for a typo to end up in the email.
+   Templates starting with *my_* will be ignored by git. So it's recommended to
+   create your templates with that pattern, e.g my_maintenance_notification.txt

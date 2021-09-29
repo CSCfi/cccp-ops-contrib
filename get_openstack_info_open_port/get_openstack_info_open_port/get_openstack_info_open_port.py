@@ -52,7 +52,7 @@ def jprint(object):
     
 class get_openstack_info_open_port:
 
-    def __init__(self, debug_level, log_file, ip, port, method, protocol):
+    def __init__(self, debug_level, log_file, ip, port, method, protocol, scan_port):
         ''' Initial function called when object is created '''
         self.config = dict()
         self.config['debug_level'] = debug_level
@@ -65,26 +65,28 @@ class get_openstack_info_open_port:
         self._os_auth()
         self.all_floating_ips = self.neutron.list_floatingips(floating_ip_address=self.ip)['floatingips']
         self._log.debug(f"Found {len(self.all_floating_ips)} floating IP.")
-        if protocol == 'ICMP':
+        if self.protocol == 'icmp':
             lport = list()
             lport.append(port[0])
             port = lport
         for self.port in port:
             self.rule_found = False
             if self._check_known_ip():
-                self._log.debug(f"IP found in your environment. Testing that '{self.ip} {self.protocol}/{self.port}' is actually open...")
-                if self._test_open_port(self.ip, self.port, self.protocol):
-                    self._log.info(f"Port '{self.port}' reachable.")
-                    self._check_openstack()
-                    if method == 'IP':
-                        self._check_with_ip_method()
+                self._log.debug(f"IP found in your environment.")
+                if scan_port:
+                    self._log.debug(f"Testing that '{self.ip} {self.protocol}/{self.port}' is actually open...")
+                    if self._test_open_port(self.ip, self.port, self.protocol):
+                        self._log.info(f"Port '{self.port}' reachable.")
                     else:
-                        self._check_with_instance_method()
-                    if not self.rule_found:
-                        self._log.info(f"No rule found that allow all incoming traffic to IP ̣{self.ip} and port {self.port}")
-                        continue
+                        self._log.info(f"Port '{port}' NOT reachable.")
+                self._check_openstack()
+                if method == 'IP':
+                    self._check_with_ip_method()
                 else:
-                    self._log.info(f"Port '{port}' NOT reachable.")
+                    self._check_with_instance_method()
+                if not self.rule_found:
+                    self._log.info(f"No rule found that allow all incoming traffic to IP ̣{self.ip} and port {self.port}")
+                    continue
             else:
                 self._log.info(f"The IP '{self.ip}' couldn't be found in your OpenStack environment.")
                 sys.exit(6)
@@ -94,15 +96,21 @@ class get_openstack_info_open_port:
         self.floatingip = self._get_openstack_floating_ip()
         self.project_id = self.floatingip['project_id']
         port_id = self.floatingip['port_id']
-        port = self.neutron.show_port(port_id)
-        self.server_id = port['port']['device_id']
-        server = self.nova.servers.get(self.server_id).to_dict()
-        self.server_name = server['name']
-        # The best solution to get the project name would be to call the Placement API with the ID, but there is no Python module ready yet
-        self.project_name = ', '.join(server['addresses'].keys())
-        port = self.neutron.show_port(self.floatingip['port_id'])['port']
-        for security_group in port['security_groups']:
-            self._check_security_group(security_group)      
+        if port_id is None:
+            self._log.info(f"The IP '{self.ip}' is not attached to a port.")
+        else:
+            self._log.debug(f"Obtained port id '{port_id}'")
+            port = self.neutron.show_port(port_id)
+            self.server_id = port['port']['device_id']
+            self._log.debug(f"Obtained server id '{self.server_id}'")
+            server = self.nova.servers.get(self.server_id).to_dict()
+            self.server_name = server['name']
+            self._log.debug(f"Obtained server name '{self.server_name}'")
+            # The best solution to get the project name would be to call the Placement API with the ID, but there is no Python module ready yet
+            self.project_name = ', '.join(server['addresses'].keys())
+            port = self.neutron.show_port(self.floatingip['port_id'])['port']
+            for security_group in port['security_groups']:
+                self._check_security_group(security_group)      
 
     def _check_with_instance_method(self):
         self._log.debug(f"Looking for instance with IP '{self.ip}' in OpenStack's region '{os.environ['OS_REGION_NAME']}' as user '{os.environ['OS_USERNAME']}' with port '{self.port}' open to incoming connections...")
@@ -121,22 +129,30 @@ class get_openstack_info_open_port:
 
     def _check_security_group_rules(self, security_group_rules):
         for rule in security_group_rules:
-            remote_ip_prefix = rule.get('remote_ip_prefix', '')
-            if rule.get('direction', '') != 'ingress' or not remote_ip_prefix:
-                continue
-            netmask = remote_ip_prefix.split("/")[1]
-            if netmask != '0':
-                continue
-            port_range_max = rule.get('port_range_max', 0) 
-            port_range_min = rule.get('port_range_min', 0)  
-            if port_range_max is not None and port_range_min is not None and port_range_max <= self.port  and port_range_min >= self.port:
-                self._log.warn(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
-                self.rule_found = True
-            else:
-                print('no match')
+                if self.protocol != rule['protocol']:
+                    self._log.debug(f"Not matching rule due to protocol not equal '{self.protocol}': {json.dumps(rule, indent=2)}")
+                    continue
+                remote_ip_prefix = rule.get('remote_ip_prefix', '')
+                if rule.get('direction', '') != 'ingress':
+                    self._log.debug(f"Not matching rule due to direction: {json.dumps(rule, indent=2)}")
+                    continue
+                if not remote_ip_prefix:
+                    self._log.debug(f"Not matching rule due to remote IP: {json.dumps(rule, indent=2)}")
+                    continue                    
+                netmask = remote_ip_prefix.split("/")[1]
+                if netmask != '0':
+                    continue
+                port_range_max = rule.get('port_range_max', 0) 
+                port_range_min = rule.get('port_range_min', 0)  
+                if (port_range_max is None and port_range_min is None) or (port_range_max <= self.port  and port_range_min >= self.port):
+                    self._log.warning(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
+                    self._log.debug(f"Matching rule: {json.dumps(rule, indent=2)}")
+                    self.rule_found = True
+                else:
+                    self._log.debug(f"Not matching rule due to port: {json.dumps(rule, indent=2)}")
         
     def _test_open_port(self, ip, port, protocol):
-        if protocol == 'TCP':
+        if protocol == 'tcp':
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(10)
             result = sock.connect_ex((ip, port))
@@ -145,10 +161,10 @@ class get_openstack_info_open_port:
                 return True
             else:
                 return False
-        elif protocol == 'UDP':
+        elif protocol == 'udp':
             self._log.debug("UDP is not connection oriented so it's not possible to scan and trust the result, so we assume is open.")
             return True
-        elif protocol == 'ICMP':
+        elif protocol == 'icmp':
             try:
                 sock = ping(ip, privileged=False)
             except:
@@ -252,9 +268,6 @@ class get_openstack_info_open_port:
             log_folder = os.path.join(home_folder, "log")
             log_file = os.path.join(log_folder, "get_openstack_info_open_port.log")
 
-        if not os.path.exists(os.path.dirname(log_file)):
-            os.mkdir(os.path.dirname(log_file))
-
         filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
         # create formatter
         formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
@@ -291,13 +304,13 @@ def validate_global_ip(ctx, param, value):
               ),default='IP', help='Method used to find the security group rule.')
 @click.option('--protocol', '-t',
               type=click.Choice(
-                ["TCP", "UDP", "ICMP"],
+                ["tcp", "udp", "icmp"],
                 case_sensitive=False,
-              ),default='TCP', help='Protocol of the port.')
-#@click.option("--dummy","-n" is_flag=True, help="Don't do anything, just show what would be done.") # Don't forget to add dummy to parameters of main function
+              ),default='tcp', help='Protocol of the port.')
+@click.option("--scan-port","-s", is_flag=True, help="Do a port scan before checking for rules.")
 @click_config_file.configuration_option()
-def __main__(debug_level, log_file, ip, port, method, protocol):
-    object = get_openstack_info_open_port(debug_level, log_file, ip, port, method, protocol)
+def __main__(debug_level, log_file, ip, port, method, protocol, scan_port):
+    object = get_openstack_info_open_port(debug_level, log_file, ip, port, method, protocol, scan_port)
     
 
 if __name__ == "__main__":

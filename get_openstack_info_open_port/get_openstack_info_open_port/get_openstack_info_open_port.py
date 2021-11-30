@@ -144,7 +144,7 @@ class get_openstack_info_open_port:
                     continue
                 port_range_max = rule.get('port_range_max', 0) 
                 port_range_min = rule.get('port_range_min', 0)  
-                if (port_range_max is None and port_range_min is None) or (port_range_max <= self.port  and port_range_min >= self.port):
+                if (port_range_max is None and port_range_min is None) or (self.port <= port_range_max and self.port >= port_range_min ):
                     self._log.warning(f"Attention! Rule '{rule['id']}' in security group '{rule['security_group_id']}', project '{self.project_name}' ({self.project_id})' allows incoming traffic from everywhere to instance '{self.server_name}' ({self.server_id}).")
                     self._log.debug(f"Matching rule: {json.dumps(rule, indent=2)}")
                     self.rule_found = True
@@ -263,10 +263,15 @@ class get_openstack_info_open_port:
 
         if 'log_file' in self.config:
             log_file = self.config['log_file']
+            log_folder = os.path.dirname(log_file)
         else:
             home_folder = os.environ.get('HOME', os.environ.get('USERPROFILE', ''))
             log_folder = os.path.join(home_folder, "log")
             log_file = os.path.join(log_folder, "get_openstack_info_open_port.log")
+
+        if not os.path.exists(log_folder):
+            os.mkdir(log_folder)
+
 
         filehandler = logging.handlers.RotatingFileHandler(log_file, maxBytes=102400000)
         # create formatter

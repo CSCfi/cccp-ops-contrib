@@ -43,16 +43,16 @@ epilog = """Examples:
 NB! please run this with 'python cloudmailer.py ...' so that it uses your current virtualenv
 
 Notify customers using a list of VMs:
-python cloudmailer.py  -m 'cPouta: VMs have been migrated' -t mail_template.txt -n  -v vmuuidlist
+python cloudmailer.py  -m 'cPouta: VMs have been migrated' -t templates/mail_template.txt -n  -v vmuuidlist
 
 Notify customers using a list of hypervisors:
-python cloudmailer.py  -m 'cPouta: Failed disk on hypervisor, VMs lost' -t mail_template.txt -n -y hypervisorlist
+python cloudmailer.py  -m 'cPouta: Failed disk on hypervisor, VMs lost' -t templates/mail_template.txt -n -y hypervisorlist
 
 Notify customers of particular computing projects
-python cloudmailer.py  -m 'ePouta: VM connection downtime due to maintenance' -t mail_template.txt -n -p projectlist
+python cloudmailer.py  -m 'ePouta: VM connection downtime due to maintenance' -t templates/mail_template.txt -n -p projectlist
 
 Schedule downtime for VMs on specfic hypervisors (120 min interval):
-python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_template.txt -s -y hypevisotlist -d "2018-07-28 08:00" -i 120
+python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t templates/mail_template.txt -s -y hypevisotlist -d "2018-07-28 08:00" -i 120
 """
 
 TEMPDIR = "temporary_files"
@@ -261,13 +261,33 @@ def readConfiguration():
                 MAX_UPGRADE_AT_ONCE = config.get('DEFAULT', 'MAX_UPGRADE_AT_ONCE')
             break
 
-    if (not TEMPDIR or not HOST_SCHEDULE or not AFFECTED_VMS or not MAIL_SERVER or not MAIL_FROM or not MAIL_BCC):
+    all_present = True
+    if not TEMPDIR:
+        all_present = False
+        print('Missing required parameter TEMPDIR.')
+    if not HOST_SCHEDULE:
+        all_present = False
+        print('Missing required parameter HOST_SCHEDULE.')
+    if not AFFECTED_VMS:
+        all_present = False
+        print('Missing required parameter AFFECTED_VMS.')
+    if not MAIL_SERVER:
+        all_present = False
+        print('Missing required parameter MAIL_SERVER.')
+    if not MAIL_FROM:
+        all_present = False
+        print('Missing required parameter MAIL_FROM.')
+    if not all_present:
         print('Error, there are missing variables:')
-        print( 'You need to set all required variables in your configuration file: TEMPDIR=%s, HOST_GROUP_DEBUG=%s,'
-               ' AFFECTED_VMS=%s, HOST_SCHEDULE=%s, MAIL_SERVER=%s, MAIL_FROM=%s '
-               % (str(TEMPDIR), str(HOST_GROUP_DEBUG), str(AFFECTED_VMS), str(HOST_SCHEDULE), str(MAIL_SERVER), str(MAIL_FROM) ))
+        print('You need to set all required variables in your configuration file:')
+        print(f"TEMPDIR={TEMPDIR}")
+        print(f"HOST_GROUP_DEBUG={HOST_GROUP_DEBUG}")
+        print(f"AFFECTED_VMS={AFFECTED_VMS}")
+        print(f"HOST_SCHEDULE={HOST_SCHEDULE}")
+        print(f"MAIL_SERVER={MAIL_SERVER}")
+        print(f"MAIL_FROM={MAIL_FROM}")
         print('You can make a copy of cloudmailer-example.cfg to cloudmailer.cfg and edit this last file to customize the tool.')
-        print("Reading configuration from %s failed.\n" % ", ".join(CONFIG_FILES))
+        print(f"Reading configuration from {', '.join(CONFIG_FILES)} failed.\n")
         usage()
         sys.exit(2)
 

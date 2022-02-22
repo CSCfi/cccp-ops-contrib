@@ -15,7 +15,6 @@ import functools
 import os
 import configparser
 import sys
-import syslog
 import argparse
 import pprint
 

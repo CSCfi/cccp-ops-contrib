@@ -1,2 +1,5 @@
-configparser
 keystoneauth1
+python-keystoneclient
+python-novaclient
+click
+click_config_file

@@ -9,14 +9,15 @@
 # Johan Guldmyr <johan.guldmyr@csc.fi>
 # Oscar Kraemer <oscar.kraemer@csc.fi>
 # Jukka Nousiainen <jukka.nousiainen@csc.fi>
+# Antonio J. Delgado <antonio.delgado@csc.fi>
 
 import functools
 import os
 import configparser
 import sys
-import syslog
 import argparse
 import pprint
+
 
 from keystoneauth1 import session
 from keystoneauth1.identity import v3
@@ -37,7 +38,22 @@ try:
 except ImportError:
     from itertools import izip_longest as zip_longest
 
+tool_description = 'Send mails about hypervisor/VM troubles.'
+epilog = """Examples:
+NB! please run this with 'python cloudmailer.py ...' so that it uses your current virtualenv
 
+Notify customers using a list of VMs:
+python cloudmailer.py  -m 'cPouta: VMs have been migrated' -t templates/mail_template.txt -n  -v vmuuidlist
+
+Notify customers using a list of hypervisors:
+python cloudmailer.py  -m 'cPouta: Failed disk on hypervisor, VMs lost' -t templates/mail_template.txt -n -y hypervisorlist
+
+Notify customers of particular computing projects
+python cloudmailer.py  -m 'ePouta: VM connection downtime due to maintenance' -t templates/mail_template.txt -n -p projectlist
+
+Schedule downtime for VMs on specfic hypervisors (120 min interval):
+python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t templates/mail_template.txt -s -y hypevisotlist -d "2018-07-28 08:00" -i 120
+"""
 
 TEMPDIR = "temporary_files"
 HOST_SCHEDULE = "%s/host_schedule" % TEMPDIR
@@ -66,13 +82,14 @@ class OpenStackDataStorage():
         self.getBaselineData()
 
     def getBaselineData(self):
-        print("Get All Servers")
+        # To-Do: Create a cache that expires after a few hours?
+        print("Getting all Servers")
         self.all_servers = self.nova.servers.list(search_opts={"all_tenants": 1})
         print("All Servers received")
         self.all_server_groups = self.nova.server_groups.list(all_projects=True)
-        print("Get All Users")
+        print("Getting all Users")
         self.all_users = self.keystone_v3.users.list()
-        print("Get All Projects")
+        print("Getting all Projects")
         self.project_dict = {}
         for project in self.keystone_v3.projects.list():
              self.project_dict[ project.id ] = project.name
@@ -101,6 +118,9 @@ class OpenStackDataStorage():
         :rtype: dict
         """
         cred = dict()
+        if not 'OS_AUTH_URL' in os.environ:
+                print('Credentials not loaded to environment: did you load the rc file?')
+                exit(1)
         cred['auth_url'] = os.environ.get('OS_AUTH_URL').replace("v2.0", "v3")
         cred['username'] = os.environ.get('OS_USERNAME')
         cred['password'] = os.environ.get('OS_PASSWORD')
@@ -241,19 +261,46 @@ def readConfiguration():
                 MAX_UPGRADE_AT_ONCE = config.get('DEFAULT', 'MAX_UPGRADE_AT_ONCE')
             break
 
-    if (not TEMPDIR or not HOST_SCHEDULE or not AFFECTED_VMS or not MAIL_SERVER or not MAIL_FROM or not MAIL_BCC):
-        print( 'You need to set all variables, TEMPDIR=%s, HOST_GROUP_DEBUG=%s,'
-               ' AFFECTED_VMS=%s, HOST_SCHEDULE=%s, MAIL_SERVER=%s, MAIL_FROM=%s '
-               % (str(TEMPDIR), str(HOST_GROUP_DEBUG), str(AFFECTED_VMS), str(HOST_SCHEDULE), str(MAIL_SERVER), str(MAIL_FROM) ))
-        print("Reading configuration failed")
-        exit(2)
+    all_present = True
+    if not TEMPDIR:
+        all_present = False
+        print('Missing required parameter TEMPDIR.')
+    if not HOST_SCHEDULE:
+        all_present = False
+        print('Missing required parameter HOST_SCHEDULE.')
+    if not AFFECTED_VMS:
+        all_present = False
+        print('Missing required parameter AFFECTED_VMS.')
+    if not MAIL_SERVER:
+        all_present = False
+        print('Missing required parameter MAIL_SERVER.')
+    if not MAIL_FROM:
+        all_present = False
+        print('Missing required parameter MAIL_FROM.')
+    if not all_present:
+        print('Error, there are missing variables:')
+        print('You need to set all required variables in your configuration file:')
+        print(f"TEMPDIR={TEMPDIR}")
+        print(f"HOST_GROUP_DEBUG={HOST_GROUP_DEBUG}")
+        print(f"AFFECTED_VMS={AFFECTED_VMS}")
+        print(f"HOST_SCHEDULE={HOST_SCHEDULE}")
+        print(f"MAIL_SERVER={MAIL_SERVER}")
+        print(f"MAIL_FROM={MAIL_FROM}")
+        print('You can make a copy of cloudmailer-example.cfg to cloudmailer.cfg and edit this last file to customize the tool.')
+        print(f"Reading configuration from {', '.join(CONFIG_FILES)} failed.\n")
+        usage()
+        sys.exit(2)
 
 def listFile(textfile):
     # Reads a file. Each line is returned as an entry.
-    lfile = open(textfile, "r")
-    items = list(map(str.strip, lfile.readlines()))
-    lfile.close()
-    return items
+    try:
+        lfile = open(textfile, "r")
+        items = list(map(str.strip, lfile.readlines()))
+        lfile.close()
+        return items
+    except IOError as error:
+        print(f"Error reading file '{textfile}'. {error}")
+        sys.exit(3)
 
 # getServergroupsAndVms
 #
@@ -526,9 +573,11 @@ def sendMails(send_emails, subject, template, projects):
 
     print(str(len(projects)) + " projects to send email to.")
     ask_for_verification = True
+    print(f"Establishing a connection with mail server '{MAIL_SERVER}:25'...")
     smtpconn = smtplib.SMTP(MAIL_SERVER, 25)
 
     for project in projects.keys():
+        print(f"Processing project '{projects[project]['name']}'...")
         if len("".join(projects[project]["emails"])) == 0:
             print("Project %s has no email recipients. PLEASE NOTE that this project will not receive any email!" % projects[project]["name"])
             continue
@@ -564,7 +613,9 @@ def sendMails(send_emails, subject, template, projects):
             message_bcc = bcc.encode("utf-8","ignore")
         else:
             print("Don't know what version of python is this is")
-        emailcopy = open("%s/%s" %(TEMPDIR, projects[project]["name"]), "w")
+        file_name = "%s/%s" %(TEMPDIR, projects[project]["name"])
+        print(f"Creating file '{file_name}' ...")
+        emailcopy = open(file_name, "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
         emailcopy.write("To: %s\n" % emails_to)
         emailcopy.write("Subject: %s\n" % subject)
@@ -589,6 +640,8 @@ def sendMails(send_emails, subject, template, projects):
                 msg['To'] = MAIL_BCC
 #                print(msg)
                 smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
+        else:
+            print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
 
     smtpconn.quit()
 
@@ -601,29 +654,31 @@ def askToContinue(question, required_answer='Yes'):
        print ("You did not write \"" + required_answer + "\". Exiting.")
        exit(0)
 
+def usage():
+    print('Usage:')
+    print(tool_description)
+    print(epilog)
+    print('-m|--mailsubject\n  Subject of the mail')
+    print('-t|--template\n  Path to a mail template file. See templates/ subdirectory')
+    print('-n|--notify\n  Notify the customers, but do not schedule anything')
+    print('-s|--schedule\n  Schedule downtime slots for te VMs.')
+    print('-y|--hypervisors\n  Text file that contains the newline separated list of affected hypervisors.')
+    print('-v|--vms\n  Text file that contains the newline separated list of affected vms.')
+    print('-p|--projects\n  Text file that contains the newline separated list of affected project names.')
+    print('--I-am-sure-that-I-want-to-send-emails\n  Actually send out eMails')
+    print('-d|--date\n  The date of the first scheduled downtime in the following format "YYYY-mm-DD HH:MM"')
+    print('-i|--interval\n  Minutes between the scheduled downtimes (int, default=60)')
+    print("--max\n  Maximum numbers of instances that will get upgraded at once (int, default=%s)" % MAX_UPGRADE_AT_ONCE)
+
 def main(argv=None):
 
     if argv is None:
         argv = sys.argv
 
     readConfiguration()
-    parser = argparse.ArgumentParser(description='Send mails about hypervisor/VM troubles.',
+    parser = argparse.ArgumentParser(description=tool_description,
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
-                                     epilog="""Examples:
-NB! please run this with 'python cloudmailer.py ...' so that it uses your current virtualenv
-
-Notify customers using a list of VMs:
-python cloudmailer.py  -m 'cPouta: VMs have been migrated' -t mail_template.txt -n  -v vmuuidlist
-
-Notify customers using a list of hypervisors:
-python cloudmailer.py  -m 'cPouta: Failed disk on hypervisor, VMs lost' -t mail_template.txt -n -y hypervisorlist
-
-Notify customers of particular computing projects
-python cloudmailer.py  -m 'ePouta: VM connection downtime due to maintenance' -t mail_template.txt -n -p projectlist
-
-Schedule downtime for VMs on specfic hypervisors (120 min interval):
-python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_template.txt -s -y hypevisotlist -d "2018-07-28 08:00" -i 120
-""")
+                                     epilog=epilog)
     parser.add_argument('-m', '--mailsubject', dest="mailsubject",
                         required=True, help="Subject of the mail")
     parser.add_argument('-t', '--template', dest='template',
@@ -703,17 +758,13 @@ python cloudmailer.py  -m "cPouta: Virtual machine downtime schedule." -t mail_t
         if args.schedule:
             print ("Cloudmailer does not currently support scheduling downtime on a project basis. Only hypervisor based downtimes can be scheduled.")
             return 1
-        try:
-            projectnames = listFile(args.projects)
-            data = OpenStackDataStorage()
-            data.mapAffectedProjectsToRoleAssignments(projectnames)
-            mails = notifyProjectMembers(data, projectnames)
-            # Send emails if the yes-please-really-send-the-emails argument was given
-            sendMails(args.sendemail, args.mailsubject, template, mails)
-            exit(0)
-        except IOError:
-            print ("Error opening projectfile %s" % args.projects)
-            return 1
+        projectnames = listFile(args.projects)
+        data = OpenStackDataStorage()
+        data.mapAffectedProjectsToRoleAssignments(projectnames)
+        mails = notifyProjectMembers(data, projectnames)
+        # Send emails if the yes-please-really-send-the-emails argument was given
+        sendMails(args.sendemail, args.mailsubject, template, mails)
+        exit(0)
 
     if args.schedule:
         try:

@@ -186,7 +186,7 @@ def liveMigrateInstance(instance, allow_live_block_migration):
 def monitoringMigration(instance, expected_status, expected_result):
 
     status = expected_status
-    log_and_print(str(instance.id) + ' Starting monitroing migration')
+    log_and_print(str(instance.id) + ' Starting monitoring migration')
     server_migration_status = nova.server_migrations.list(instance.id)
     if not len(server_migration_status) == 0:
         pprint (server_migration_status.__dict__)
@@ -319,7 +319,7 @@ def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, 
         node_list = getHypervisorUUID([getattr(instance, 'OS-EXT-SRV-ATTR:host')])
         node = node_list[0]
         if max_instances_to_migrate == 0:
-           log_and_print("Maximum of instances to migrate have been reaced", 'info')
+           log_and_print("Maximum number of instances to migrate have been reached", 'info')
            break
         # Make an educated guess about hypervisor type. Ceph-backed instances see hundreds of TBs in local_gb.
         # Local disk/LVM backed instances see only their local disks' capacity in local_gb.

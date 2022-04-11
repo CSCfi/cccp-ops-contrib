@@ -575,6 +575,7 @@ def sendMails(send_emails, subject, template, projects):
     ask_for_verification = True
     print(f"Establishing a connection with mail server '{MAIL_SERVER}:25'...")
     smtpconn = smtplib.SMTP(MAIL_SERVER, 25)
+    notified_admin = False
 
     for project in projects.keys():
         print(f"Processing project '{projects[project]['name']}'...")
@@ -622,7 +623,6 @@ def sendMails(send_emails, subject, template, projects):
         emailcopy.write(projmail_str)
         emailcopy.close()
 
-
         if send_emails and len(projects[project]["emails"]) > 0:
             if ask_for_verification:
                 askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
@@ -640,9 +640,9 @@ def sendMails(send_emails, subject, template, projects):
                 msg['To'] = MAIL_BCC
 #                print(msg)
                 smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
-        else:
+        elif notified_admin == False:
             print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
-
+            notified_admin = True
     smtpconn.quit()
 
 def askToContinue(question, required_answer='Yes'):

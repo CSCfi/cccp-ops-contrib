@@ -234,7 +234,7 @@ class get_openstack_info_open_port:
                         self.affected_instance = server_info
         if self.affected_instance is None:
             self._log.error(f"Not found any instance with IP '{self.ip}'")
-            sys.ext(2)
+            sys.exit(2)
             
     def _check_affected_security_groups(self):
         all_security_groups_in_project = self.neutron.list_security_groups(tenant_id=self.affected_instance['tenant_id'])['security_groups']

@@ -30,7 +30,9 @@ import time
 
 from threading import Thread
 import logging
-TEMPDIR = 'log_files'
+TEMPDIR = '%s/log' % os.environ.get('HOME', '')
+if not os.path.exists(TEMPDIR):
+    os.mkdir(TEMPDIR)
 LOGFILE = "%s/migration_loggs.log" % TEMPDIR
 TIMEOUT_SECONDS = 30
 # Setup logging

@@ -54,7 +54,7 @@ def getGredentials():
     :rtype: dict
     """
     cred = dict()
-    cred['auth_url'] = os.environ.get('OS_AUTH_URL').replace("v2.0", "v3")
+    cred['auth_url'] = os.environ.get('OS_AUTH_URL', '').replace("v2.0", "v3")
     cred['username'] = os.environ.get('OS_USERNAME')
     cred['password'] = os.environ.get('OS_PASSWORD')
     if 'OS_PROJECT_ID' in os.environ:

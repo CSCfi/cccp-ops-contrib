@@ -639,7 +639,7 @@ def sendMails(send_emails, subject, template, projects):
                 msg["Subject"] = subject + " - " + projects[project]["name"]
                 msg['To'] = MAIL_BCC
 #                print(msg)
-                smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
+                smtpconn.sendmail(MAIL_FROM, MAIL_BCC.split(","), msg.as_string())
         elif notified_admin == False:
             print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
             notified_admin = True

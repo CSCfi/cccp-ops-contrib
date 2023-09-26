@@ -619,6 +619,8 @@ def sendMails(send_emails, subject, template, projects):
         emailcopy = open(file_name, "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
         emailcopy.write("To: %s\n" % emails_to)
+        if MAIL_BCC:
+            emailcopy.write("Bcc: %s\n" % MAIL_BCC)
         emailcopy.write("Subject: %s\n" % subject)
         emailcopy.write(projmail_str)
         emailcopy.close()
@@ -635,11 +637,12 @@ def sendMails(send_emails, subject, template, projects):
 #                print(msg)
                 smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
             if MAIL_BCC:
-                msg = MIMEText(message_bcc)
-                msg["Subject"] = subject + " - " + projects[project]["name"]
-                msg['To'] = MAIL_BCC
-#                print(msg)
-                smtpconn.sendmail(MAIL_FROM, MAIL_BCC.split(","), msg.as_string())
+                for single_mail_bcc in MAIL_BCC.split(","):
+                    msg = MIMEText(message_bcc)
+                    msg["Subject"] = subject + " - " + projects[project]["name"]
+                    msg['To'] = single_mail_bcc
+#                    print(msg)
+                    smtpconn.sendmail(MAIL_FROM, single_mail_bcc, msg.as_string())
         elif notified_admin == False:
             print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
             notified_admin = True

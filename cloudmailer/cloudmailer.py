@@ -630,6 +630,8 @@ def sendMails(send_emails, subject, template, projects):
                 askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
                 ask_for_verification = False
             print ("Really sending emails to: %s" % ",".join(projects[project]["emails"]))
+            if MAIL_BCC:
+                print ("Really sending BCC emails to: %s" % MAIL_BCC)
             for email_address in projects[project]["emails"]:
                 msg = MIMEText(projmail_str)
                 msg["Subject"] = subject

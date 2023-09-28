@@ -635,14 +635,18 @@ def sendMails(send_emails, subject, template, projects):
                 msg["Subject"] = subject
                 msg["To"] = email_address
 #                print(msg)
+                print ("Sending email to: %s" % email_address)
                 smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
+                print ("Email to %s sent successfully" % email_address)
             if MAIL_BCC:
                 for single_mail_bcc in MAIL_BCC.split(","):
                     msg = MIMEText(message_bcc)
                     msg["Subject"] = subject + " - " + projects[project]["name"]
                     msg['To'] = single_mail_bcc
 #                    print(msg)
+                    print ("Sending BCC email to: %s" % single_mail_bcc)
                     smtpconn.sendmail(MAIL_FROM, single_mail_bcc, msg.as_string())
+                    print ("BCC email to %s sent successfully" % single_mail_bcc)
         elif notified_admin == False:
             print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
             notified_admin = True

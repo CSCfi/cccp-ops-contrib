@@ -619,6 +619,8 @@ def sendMails(send_emails, subject, template, projects):
         emailcopy = open(file_name, "w")
         emailcopy.write("From: %s\n" % MAIL_FROM)
         emailcopy.write("To: %s\n" % emails_to)
+        if MAIL_BCC:
+            emailcopy.write("Bcc: %s\n" % MAIL_BCC)
         emailcopy.write("Subject: %s\n" % subject)
         emailcopy.write(projmail_str)
         emailcopy.close()
@@ -628,18 +630,25 @@ def sendMails(send_emails, subject, template, projects):
                 askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
                 ask_for_verification = False
             print ("Really sending emails to: %s" % ",".join(projects[project]["emails"]))
+            if MAIL_BCC:
+                print ("Really sending BCC emails to: %s" % MAIL_BCC)
             for email_address in projects[project]["emails"]:
                 msg = MIMEText(projmail_str)
                 msg["Subject"] = subject
                 msg["To"] = email_address
 #                print(msg)
+                print ("Sending email to: %s" % email_address)
                 smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
+                print ("Email to %s sent successfully" % email_address)
             if MAIL_BCC:
-                msg = MIMEText(message_bcc)
-                msg["Subject"] = subject + " - " + projects[project]["name"]
-                msg['To'] = MAIL_BCC
-#                print(msg)
-                smtpconn.sendmail(MAIL_FROM, MAIL_BCC, msg.as_string())
+                for single_mail_bcc in MAIL_BCC.split(","):
+                    msg = MIMEText(message_bcc)
+                    msg["Subject"] = subject + " - " + projects[project]["name"]
+                    msg['To'] = single_mail_bcc
+#                    print(msg)
+                    print ("Sending BCC email to: %s" % single_mail_bcc)
+                    smtpconn.sendmail(MAIL_FROM, single_mail_bcc, msg.as_string())
+                    print ("BCC email to %s sent successfully" % single_mail_bcc)
         elif notified_admin == False:
             print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
             notified_admin = True

@@ -746,6 +746,7 @@ def get_template(template_path):
         templf = open(args.template, "r")
         template = templf.readlines()
         templf.close()
+        return template
     except IOError:
         print ("Error opening template file %s. It needs to be a path to a file" % args.template)
         exit(1)

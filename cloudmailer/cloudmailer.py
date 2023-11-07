@@ -679,7 +679,7 @@ def usage():
     print('-i|--interval\n  Minutes between the scheduled downtimes (int, default=60)')
     print("--max\n  Maximum numbers of instances that will get upgraded at once (int, default=%s)" % MAX_UPGRADE_AT_ONCE)
 
-def main(argv=None):
+def read_args(argv=None):
 
     if argv is None:
         argv = sys.argv
@@ -720,18 +720,44 @@ def main(argv=None):
 
     if args.schedule and not args.date:
         print ("When scheduling you need to also set a --date")
-        return 22
+        exit(22)
+    # Make sure that the args date is set and have the correct format when scheduling
+    if args.schedule:
+        try:
+            starttime = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
+        except ValueError:
+            print ('Starttime %s does not match the format %Y-%m-%d %H:%M')
+            exit(1)
 
-    if not os.path.exists(TEMPDIR):
-        os.makedirs(TEMPDIR)
+    if args.schedule and args.vms:
+        print ("Cloudmailer does not currently support scheduling downtime on a VM basis. " \
+               "Only hypervisor based downtimes can be scheduled.")
+        exit(1)
 
+    if args.projects and  args.schedule:
+        print ("Cloudmailer does not currently support scheduling downtime on a project basis. " \
+               "Only hypervisor based downtimes can be scheduled.")
+        exit(1)
+
+    return args
+
+def get_template(template_path):
     try:
         templf = open(args.template, "r")
         template = templf.readlines()
         templf.close()
     except IOError:
         print ("Error opening template file %s. It needs to be a path to a file" % args.template)
-        return 1
+        exit(1)
+
+def main(argv=None):
+
+    args = read_args(argv)
+
+    if not os.path.exists(TEMPDIR):
+        os.makedirs(TEMPDIR)
+
+    template = get_template(args.template)
 
     if args.hypervisors:
         try:
@@ -748,11 +774,9 @@ def main(argv=None):
         # Write intermediary scheduling result to a file
         hostGroupsToFile(hostgroups)
         vms = listVMsInHosts(data,hostgroups)
+        writeAffectedVMs(vms)
 
-    if args.vms:
-        if args.schedule:
-            print ("Cloudmailer does not currently support scheduling downtime on a VM basis. Only hypervisor based downtimes can be scheduled.")
-            return 1
+    elif args.vms:
         try:
             vmids = listFile(args.vms)
         except IOError:
@@ -762,11 +786,9 @@ def main(argv=None):
         data.mapAffectedServersToRoleAssignments(instances=vmids)
         hostgroups = [["fakehostname"]]
         vms = { "fakehostname" : data.getVMsByID(vmids) }
+        writeAffectedVMs(vms)
 
-    if args.projects:
-        if args.schedule:
-            print ("Cloudmailer does not currently support scheduling downtime on a project basis. Only hypervisor based downtimes can be scheduled.")
-            return 1
+    elif args.projects:
         projectnames = listFile(args.projects)
         data = OpenStackDataStorage()
         data.mapAffectedProjectsToRoleAssignments(projectnames)
@@ -775,19 +797,13 @@ def main(argv=None):
         sendMails(args.sendemail, args.mailsubject, template, mails)
         exit(0)
 
+
     if args.schedule:
-        try:
-            starttime = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
-        except ValueError:
-            print ('Starttime %s does not match the format %Y-%m-%d %H:%M')
-            return 1
-    writeAffectedVMs(vms)
-    # Generate emails
-    if args.schedule:
+        starttime = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
         mails = scheduleReboot(data, hostgroups, vms, starttime, args.interval)
-    if args.notify:
+    elif args.notify:
         mails = notifyVMOwnerProjectMembers(data, hostgroups, vms)
-    # Send emails if the yes-please-really-send-the-emails argument was given
+
     sendMails(args.sendemail, args.mailsubject, template, mails)
 
 if __name__ == "__main__":

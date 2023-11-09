@@ -748,7 +748,7 @@ def get_template(template_path):
         with open(template_path) as template_file:
              template = template_file.readlines()
     except FileNotFoundError:
-        print(f'Template path does not exist: {template_path}')
+        print(f"Template path does not exist: {template_path}")
         sys.exit(1)
     return template
 

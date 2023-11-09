@@ -120,7 +120,7 @@ class OpenStackDataStorage():
         cred = dict()
         if not 'OS_AUTH_URL' in os.environ:
                 print('Credentials not loaded to environment: did you load the rc file?')
-                exit(1)
+                sys.exit(1)
         cred['auth_url'] = os.environ.get('OS_AUTH_URL').replace("v2.0", "v3")
         cred['username'] = os.environ.get('OS_USERNAME')
         cred['password'] = os.environ.get('OS_PASSWORD')
@@ -132,7 +132,7 @@ class OpenStackDataStorage():
         for key in cred:
             if not cred[key]:
                 print('Credentials not loaded to environment: did you load the rc file?')
-                exit(1)
+                sys.exit(1)
         return cred
 
     def getUserEmail(self, user):
@@ -198,7 +198,7 @@ class OpenStackDataStorage():
                  return uuid
         # If we don't find a tenant with the tenant_name we want this script to fail.
         print ( "Failure: Something went wrong for tenant: " + str(tenant_name) + " project name does not exist" )
-        exit(1)
+        sys.exit(1)
 
     def getProjectInfo(self, tenant_id):
         # Get project info. Name, memberemails
@@ -661,7 +661,7 @@ def askToContinue(question, required_answer='Yes'):
         answer = raw_input(question + ' Required answer: "' + required_answer + '"')
     if not str(required_answer) == str(answer):
        print ("You did not write \"" + required_answer + "\". Exiting.")
-       exit(0)
+       sys.exit(0)
 
 def usage():
     print('Usage:')
@@ -680,7 +680,7 @@ def usage():
     print("--max\n  Maximum numbers of instances that will get upgraded at once (int, default=%s)" % MAX_UPGRADE_AT_ONCE)
 
 def read_args(argv=None):
-
+    """read the flags from the command"""
     if argv is None:
         argv = sys.argv
 
@@ -720,38 +720,43 @@ def read_args(argv=None):
 
     if args.schedule and not args.date:
         print ("When scheduling you need to also set a --date")
-        exit(22)
+        sys.exit(22)
     # Make sure that the args date is set and have the correct format when scheduling
     if args.schedule:
         try:
-            starttime = datetime.strptime(args.date, '%Y-%m-%d %H:%M')
+            datetime.strptime(args.date, '%Y-%m-%d %H:%M')
         except ValueError:
             print ('Starttime %s does not match the format %Y-%m-%d %H:%M')
-            exit(1)
+            sys.exit(1)
 
     if args.schedule and args.vms:
         print ("Cloudmailer does not currently support scheduling downtime on a VM basis. " \
                "Only hypervisor based downtimes can be scheduled.")
-        exit(1)
+        sys.exit(1)
 
     if args.projects and  args.schedule:
         print ("Cloudmailer does not currently support scheduling downtime on a project basis. " \
                "Only hypervisor based downtimes can be scheduled.")
-        exit(1)
+        sys.exit(1)
 
     return args
 
 def get_template(template_path):
+    """Read template from file"""
     try:
-        templf = open(args.template, "r")
-        template = templf.readlines()
-        templf.close()
-        return template
-    except IOError:
-        print ("Error opening template file %s. It needs to be a path to a file" % args.template)
-        exit(1)
+        # One should probably define encoding here
+        with open(template_path) as template_file:
+             template = template_file.readlines()
+    except FileNotFoundError:
+        print(f'Template path does not exist: {template_path}')
+        sys.exit(1)
+    return template
+
+
+
 
 def main(argv=None):
+    """main function"""
 
     args = read_args(argv)
 
@@ -764,8 +769,8 @@ def main(argv=None):
         try:
             hosts = listFile(args.hypervisors)
         except IOError:
-            print ("Error opening hostfile %s" % args.hypervisors )
-            return 1
+            print (f"Error opening hostfile {args.hypervisors}" )
+            sys.exit(1)
         data = OpenStackDataStorage()
         data.mapAffectedServersToRoleAssignments(hosts)
         # Generate a list of batches of nodes to be rebooted
@@ -781,8 +786,8 @@ def main(argv=None):
         try:
             vmids = listFile(args.vms)
         except IOError:
-            print ("Error opening vmfile %s" % args.vms)
-            return 1
+            print (f"Error opening vmfile {args.vms}")
+            sys.exit(1)
         data = OpenStackDataStorage()
         data.mapAffectedServersToRoleAssignments(instances=vmids)
         hostgroups = [["fakehostname"]]
@@ -796,7 +801,7 @@ def main(argv=None):
         mails = notifyProjectMembers(data, projectnames)
         # Send emails if the yes-please-really-send-the-emails argument was given
         sendMails(args.sendemail, args.mailsubject, template, mails)
-        exit(0)
+        sys.exit(0)
 
 
     if args.schedule:

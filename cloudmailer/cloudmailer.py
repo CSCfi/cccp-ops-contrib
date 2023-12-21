@@ -135,12 +135,6 @@ class OpenStackDataStorage():
                 sys.exit(1)
         return cred
 
-    def getUserEmail(self, user):
-        for i in list(self.all_users):
-           if i.id == user:
-               return i.email
-        return None
-
     def getProjectRoleAssignmentThread(self, keystone_v3, tenant_assignments , tenant_id, i ):
         try:
             tenant_assignments[i] = keystone_v3.role_assignments.list(project=tenant_id, effective=True)
@@ -177,12 +171,18 @@ class OpenStackDataStorage():
         list(map(all_assignments.extend,filter(None,result_list)))
         return all_assignments
 
-    def getRoleAssignment(self, project):
-        users = list(set( map ( lambda z:
+    def get_emails_for_project(self, project_id):
+        """get all users email that are in a project"""
+        user_ids = list(set( map ( lambda z:
             z.user['id'], filter ( lambda y:
-            y.scope['project']['id'] == project, filter(lambda x :
+            y.scope['project']['id'] == project_id, filter(lambda x :
             'project' in  x.scope , self.all_assignments )))))
-        return users
+
+
+        emails = [ user.email for user in self.all_users if user.id in user_ids ]
+        if len(emails) == 0:
+            print(f"{project_id} does not have any emails")
+        return emails
 
     def getProjectName(self, tenant_id):
         # I don't know if this is actually necessary to have try-statement
@@ -202,21 +202,11 @@ class OpenStackDataStorage():
 
     def getProjectInfo(self, tenant_id):
         # Get project info. Name, memberemails
-        project = {}
-        emails = []
-        users = []
-
         if tenant_id is None:
-            print ("Undefined input project ID while retrieving project data! Possibly trying to retrieve project data from the wrong domain.")
-            return {"name": None, "emails": emails, "servers": []}
-        users = self.getRoleAssignment(tenant_id)
-        for user in users:
-            email = self.getUserEmail(user)
-            if email:
-                emails.append(email)
-
-        if len(emails) == 0:
-            print(tenant_id + " does not have any emails")
+            print ("Undefined input project ID while retrieving project data! " \
+                   "Possibly trying to retrieve project data from the wrong domain.")
+            return {"name": None, "emails": [], "servers": []}
+        emails = self.get_emails_for_project(tenant_id)
 
         name = self.getProjectName(tenant_id)
         project = {"name": name, "emails": emails, "servers": []}
@@ -569,7 +559,56 @@ def scheduleReboot(data,hostgroups, hostdict, starttime, interval):
     reboot_schedule_file.close()
     return projects
 
-def sendMails(send_emails, subject, template, projects):
+def send_mails_to_list_of_emails(smtpclient, subject, email_address_list, mail_str):
+    """Function that actually send the emails to its recipients"""
+    for email_address in email_address_list:
+        msg = MIMEText(mail_str)
+        msg["Subject"] = subject
+        msg["To"] = email_address
+        print (f"Sending email to: {email_address}")
+        smtpclient.sendmail(MAIL_FROM, email_address, msg.as_string())
+        print (f"Email to {email_address} sent successfully")
+
+def generate_mail_text(project_dict, template):
+    """genereate project email text from template"""
+    projmail = ""
+    for line in template:
+        try:
+            if line.find("PROJECT-NAME") != -1:
+                projmail = projmail + project_dict["name"] + "\n"
+                projmail = projmail + "-"*len(project_dict["name"]) + "\n"
+            elif line.find("LIST-OF-MACHINES") != -1:
+                for machine in project_dict["servers"]:
+                    projmail = projmail + machine
+            else:
+                projmail = projmail + line
+        except Exception as e:
+            print ("There was an issue with this project:")
+            pprint.pprint(project_dict)
+            print( e )
+            return False
+    return projmail
+
+def write_copy_of_email_to_file(project_name, emails_str, subject, projmail_str):
+    """Write the project emails to file for review"""
+    file_name = f"{TEMPDIR}/{project_name}"
+    print(f"Creating file '{file_name}' ...")
+    with open(file_name, "w", encoding='UTF-8') as emailcopy:
+        emailcopy.write(f"From: {MAIL_FROM}\n")
+        emailcopy.write(f"To: {emails_str}\n")
+        if MAIL_BCC:
+            emailcopy.write(f"Bcc: {MAIL_BCC}\n")
+        emailcopy.write(f"Subject: {subject}\n")
+        emailcopy.write(projmail_str)
+
+def generate_and_send_emails(send_emails, subject, template, projects):
+    """This function does the following:
+    1. Genereate mail for each project
+    2. Write the generated mails to file
+    3. Send emails to customers if send_emails == True
+    4. Send emails to BCC id send_eamils === True and MAIL_BCC
+        projects{ tenant_id:{ 'name': str(), 'emails': ["example@example.org"] }}
+    """
 
     print(str(len(projects)) + " projects to send email to.")
     ask_for_verification = True
@@ -577,84 +616,49 @@ def sendMails(send_emails, subject, template, projects):
     smtpconn = smtplib.SMTP(MAIL_SERVER, 25)
     notified_admin = False
 
-    for project in projects.keys():
-        print(f"Processing project '{projects[project]['name']}'...")
-        if len("".join(projects[project]["emails"])) == 0:
-            print("Project %s has no email recipients. PLEASE NOTE that this project will not receive any email!" % projects[project]["name"])
+    for project in projects:
+        print(project)
+        project_name = projects[project]["name"]
+        project_email_address_list = projects[project]['emails']
+        print(f"Processing project '{project_name}'...")
+        if len(project_email_address_list) == 0:
+            print(f"Project {project_name} has no email recipients. PLEASE NOTE that this " \
+                  "project will not receive any email!")
             continue
+        projmail_str = generate_mail_text(projects[project], template)
+        if not projmail_str:
+            send_emails = False
+            print( "Emails won't be sent for {project_name} because of exception")
+            continue
+        project_email_address_list = projects[project]["emails"]
+        emails_str = ', '.join(project_email_address_list)
+        write_copy_of_email_to_file(project_name, emails_str, subject, projmail_str)
 
-        projmail = ""
-        for line in template:
-            try:
-                if line.find("PROJECT-NAME") != -1:
-                    projmail = projmail + projects[project]["name"] + "\n"
-                    projmail = projmail + "-"*len(projects[project]["name"]) + "\n"
-                elif line.find("LIST-OF-MACHINES") != -1:
-                    for machine in projects[project]["servers"]:
-                        projmail = projmail + machine
-                else:
-                    projmail = projmail + line
-            except Exception as e:
-                print ("There was an issue with this project:")
-                pprint.pprint(projects[project])
-                print( e )
-                if send_emails:
-                    send_emails = False
-                    print( "Emails won't be sent because of exception")
-                continue
-
-
-        emails_to = ",".join(projects[project]["emails"])
-        bcc = "Mail sent to: " + emails_to + "\n------\n\n" + projmail
-        if sys.version_info[0] == 3: # Python 3
-            projmail_str = projmail
-            message_bcc = bcc
-        elif sys.version_info[0] == 2: # Python 2
-            projmail_str = projmail.encode("utf-8","ignore")
-            message_bcc = bcc.encode("utf-8","ignore")
-        else:
-            print("Don't know what version of python is this is")
-        file_name = "%s/%s" %(TEMPDIR, projects[project]["name"])
-        print(f"Creating file '{file_name}' ...")
-        emailcopy = open(file_name, "w")
-        emailcopy.write("From: %s\n" % MAIL_FROM)
-        emailcopy.write("To: %s\n" % emails_to)
-        if MAIL_BCC:
-            emailcopy.write("Bcc: %s\n" % MAIL_BCC)
-        emailcopy.write("Subject: %s\n" % subject)
-        emailcopy.write(projmail_str)
-        emailcopy.close()
-
-        if send_emails and len(projects[project]["emails"]) > 0:
+        if send_emails:
             if ask_for_verification:
-                askToContinue('Are you sure that you want to send the emails?', 'Yes I am sure')
+                ask_to_continue('Are you sure that you want to send the emails?', 'Yes I am sure')
                 ask_for_verification = False
-            print ("Really sending emails to: %s" % ",".join(projects[project]["emails"]))
+
+            print(f"Really sending emails to: {emails_str}")
+            send_mails_to_list_of_emails(smtpconn, subject, project_email_address_list,
+                                         projmail_str)
+
             if MAIL_BCC:
-                print ("Really sending BCC emails to: %s" % MAIL_BCC)
-            for email_address in projects[project]["emails"]:
-                msg = MIMEText(projmail_str)
-                msg["Subject"] = subject
-                msg["To"] = email_address
-#                print(msg)
-                print ("Sending email to: %s" % email_address)
-                smtpconn.sendmail(MAIL_FROM, email_address, msg.as_string())
-                print ("Email to %s sent successfully" % email_address)
-            if MAIL_BCC:
-                for single_mail_bcc in MAIL_BCC.split(","):
-                    msg = MIMEText(message_bcc)
-                    msg["Subject"] = subject + " - " + projects[project]["name"]
-                    msg['To'] = single_mail_bcc
-#                    print(msg)
-                    print ("Sending BCC email to: %s" % single_mail_bcc)
-                    smtpconn.sendmail(MAIL_FROM, single_mail_bcc, msg.as_string())
-                    print ("BCC email to %s sent successfully" % single_mail_bcc)
-        elif notified_admin == False:
-            print("Attention!!! Not sending emails right now. Please, check the created files and when you are sure execute this same command with '--I-am-sure-that-I-want-to-send-emails' parameter.")
+                print (f"Really sending BCC emails to: { MAIL_BCC}")
+                bcc_subject =  subject + " - " + project_name
+
+                bcc_message = f"Mail sent to: {emails_str} \n------\n\n {projmail_str}"
+                send_mails_to_list_of_emails(smtpconn, bcc_subject, MAIL_BCC.split(","),
+                                             bcc_message)
+
+        elif notified_admin is False:
+            print("Attention!!! Not sending emails right now. Please, check the created files " \
+                  "and when you are sure execute this same command with " \
+                  "\"--I-am-sure-that-I-want-to-send-emails\" parameter.")
             notified_admin = True
     smtpconn.quit()
 
-def askToContinue(question, required_answer='Yes'):
+def ask_to_continue(question, required_answer='Yes'):
     if sys.version_info[0] == 3: # Python 3
         answer = input(question + ' Required answer: "' + required_answer + '"')
     elif sys.version_info[0] == 2: # Python 2
@@ -800,7 +804,7 @@ def main(argv=None):
         data.mapAffectedProjectsToRoleAssignments(projectnames)
         mails = notifyProjectMembers(data, projectnames)
         # Send emails if the yes-please-really-send-the-emails argument was given
-        sendMails(args.sendemail, args.mailsubject, template, mails)
+        generate_and_send_emails(args.sendemail, args.mailsubject, template, mails)
         sys.exit(0)
 
 
@@ -810,7 +814,7 @@ def main(argv=None):
     elif args.notify:
         mails = notifyVMOwnerProjectMembers(data, hostgroups, vms)
 
-    sendMails(args.sendemail, args.mailsubject, template, mails)
+    generate_and_send_emails(args.sendemail, args.mailsubject, template, mails)
 
 if __name__ == "__main__":
     main()

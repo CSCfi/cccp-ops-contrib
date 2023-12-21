@@ -173,9 +173,12 @@ class OpenStackDataStorage():
 
     def get_emails_for_project(self, project_id):
         """get all users email that are in a project"""
-        user_ids = { item.user['id'] for item in self.all_assignments
-                                         if item.scope['project']['id'] == project_id
-                   }
+        user_ids = list(set( map ( lambda z:
+            z.user['id'], filter ( lambda y:
+            y.scope['project']['id'] == project_id, filter(lambda x :
+            'project' in  x.scope , self.all_assignments )))))
+
+
         emails = [ user.email for user in self.all_users if user.id in user_ids ]
         if len(emails) == 0:
             print(f"{project_id} does not have any emails")

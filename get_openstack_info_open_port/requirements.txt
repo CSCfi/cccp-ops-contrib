@@ -1,5 +1,5 @@
 click==8.0.1
 click_config_file==0.6.0
-python-openstackclient==3.16.3
+python-openstackclient==6.3.0
 python-neutronclient==6.7.0
 icmplib==2.1.1

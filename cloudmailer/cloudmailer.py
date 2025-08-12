@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
 # Mail users about cloud stuff
@@ -335,7 +335,7 @@ def getServergroupsAndVms(data,nodelist):
             server_found = False
             host = None
             for server in allservers:
-                if server.id == member:             
+                if server.id == member:
                     server_found = True
                     # obtain the node in which the server is hosted
                     host = getattr(server, "OS-EXT-SRV-ATTR:host")

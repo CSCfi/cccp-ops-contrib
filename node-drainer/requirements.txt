@@ -1,3 +1,4 @@
-keystoneauth1==2.21.0
-python-novaclient==9.0.1
-python-keystoneclient==3.11.0
+keystoneauth1==4.2.1 #victoria
+python-keystoneclient==4.1.1 #victoria
+python-novaclient==17.2.1 #victoria
+typing_extensions==4.14.0

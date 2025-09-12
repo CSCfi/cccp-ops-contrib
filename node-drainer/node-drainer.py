@@ -95,11 +95,9 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
                        default=False, help='Allow live block migration.\nWarning this can be quite'
                        + 'dangerous', action='store_true')
    parser.add_argument('--stop-paused-instances', dest='stop_paused_instances',
-                       default=False, help='Stop paused instances.\nWarning this can be quite'
-                       + 'dangerous', action='store_true')
+                       default=False, help='Stop paused instances.', action='store_true')
    parser.add_argument('--stop-suspended-instances', dest='stop_suspended_instances',
-                       default=False, help='Stop suspended instances.\nWarning this can be quite'
-                       + 'dangerous', action='store_true')
+                       default=False, help='Stop suspended instances.', action='store_true')
    parser.add_argument('-i', '--instance', dest='instances', type=str,
                        help='Instance to migrate', action='append', required=False)
 
@@ -341,10 +339,10 @@ def wait_for_instance_status(nova, instance, desired_status, timeout=30, interva
             log_and_print(instance.id + ' Instance is now ' + desired_status + '.')
             return True
         elif instance.status == 'ERROR':
-            failure(' ERROR ' + instance.id + ' Instance status: ' + instance.status)
+            failure(' ERROR ' + instance.id + ' Instance status: ' + instance.status, 1)
             return False
         elif time.time() - start_time > timeout:
-            failure(' ERROR ' + instance.id + ' Timed out after ' + str(timeout) + ' seconds waiting for the instance to reach ' + desired_status + '. Current status: ' + instance.status)
+            failure(' ERROR ' + instance.id + ' Timed out after ' + str(timeout) + ' seconds waiting for the instance to reach ' + desired_status + '. Current status: ' + instance.status, 1)
             return False
         time.sleep(interval)
 

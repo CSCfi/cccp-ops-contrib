@@ -348,12 +348,12 @@ def wait_for_instance_status(nova, instance, desired_status, timeout=30, interva
             return False
         time.sleep(interval)
 
-def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration):
+def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
     instances = getInstances(node, flavors)
     # Create a list of instace uuid from a list of instance objects
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     pprint (allow_live_block_migration)
-    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration)
+    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
     instances = getInstances(node, flavors)
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     log_and_print("Instances still on " + node.hypervisor_hostname + ": " + str(list_of_instance_uuids))
@@ -439,7 +439,7 @@ def main(argv=None):
        flavor_ids = getFlavorIDs(flavors)
        # This script apperently only drain one node at the time. Note that this might
        # be annoying with max_instances_to_migrate
-       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration)
+       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
 
 print(timeStr() + " Script started, logs will be stored: " + LOGFILE )
 if __name__ == "__main__":

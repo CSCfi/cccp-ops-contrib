@@ -307,7 +307,7 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
         nova.servers.unpause(instance)
         wait_for_instance_status(nova, instance, 'ACTIVE')
         nova.servers.stop(instance)
-        wait_for_instance_status(nova, instance, 'SHUTOFF')
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
         success = coldMigrateInstance(instance)
     elif ( instance.status == 'SUSPENDED'
            and getattr(instance, 'OS-EXT-STS:power_state') == 4
@@ -317,7 +317,7 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
         nova.servers.resume(instance)
         wait_for_instance_status(nova, instance, 'ACTIVE')
         nova.servers.stop(instance)
-        wait_for_instance_status(nova, instance, 'SHUTOFF')
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
         success = coldMigrateInstance(instance)
     else:
         log_instance_state(instance)
@@ -340,10 +340,8 @@ def wait_for_instance_status(nova, instance, desired_status, timeout=30, interva
             return True
         elif instance.status == 'ERROR':
             failure(' ERROR ' + instance.id + ' Instance status: ' + instance.status, 1)
-            return False
         elif time.time() - start_time > timeout:
             failure(' ERROR ' + instance.id + ' Timed out after ' + str(timeout) + ' seconds waiting for the instance to reach ' + desired_status + '. Current status: ' + instance.status, 1)
-            return False
         time.sleep(interval)
 
 def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):

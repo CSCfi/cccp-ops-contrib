@@ -305,9 +305,9 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
            and getattr(instance, 'OS-EXT-STS:task_state') == None
            and stop_paused_instances):
         nova.servers.unpause(instance)
-        wait_for_instance_status(nova, instance, 'ACTIVE')
+        wait_for_instance_status(nova, instance, 'ACTIVE', 63)
         nova.servers.stop(instance)
-        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 303)
         success = coldMigrateInstance(instance)
     elif ( instance.status == 'SUSPENDED'
            and getattr(instance, 'OS-EXT-STS:power_state') == 4
@@ -315,9 +315,9 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
            and getattr(instance, 'OS-EXT-STS:task_state') == None
            and stop_suspended_instances):
         nova.servers.resume(instance)
-        wait_for_instance_status(nova, instance, 'ACTIVE')
+        wait_for_instance_status(nova, instance, 'ACTIVE', 63)
         nova.servers.stop(instance)
-        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 303)
         success = coldMigrateInstance(instance)
     else:
         log_instance_state(instance)
@@ -328,7 +328,7 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
 
     return success
 
-def wait_for_instance_status(nova, instance, desired_status, timeout=30, interval=3):
+def wait_for_instance_status(nova, instance, desired_status, timeout=60, interval=3):
     """Wait for the instance to reach the desired status."""
     start_time = time.time()
     instance = nova.servers.get(instance.id)

@@ -317,7 +317,7 @@ def migrateInstance(instance, allow_live_block_migration, stop_paused_instances,
            and getattr(instance, 'OS-EXT-STS:task_state') == None
            and stop_suspended_instances):
         nova.servers.resume(instance)
-        # Wait time for instance to shutoff 300s (timeout we have before force shutoff) + 30s
+        # Wait time for instance to resume 60s (default timeout) + 30s
         wait_for_instance_status(nova, instance, 'ACTIVE', 90)
         nova.servers.stop(instance)
         # Wait time for instance to shutoff 300s (timeout we have before force shutoff) + 30s

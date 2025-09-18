@@ -94,6 +94,10 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
    parser.add_argument('--allow-live-block-migration', dest='allow_live_block_migration',
                        default=False, help='Allow live block migration.\nWarning this can be quite'
                        + 'dangerous', action='store_true')
+   parser.add_argument('--stop-paused-instances', dest='stop_paused_instances',
+                       default=False, help='Stop paused instances.', action='store_true')
+   parser.add_argument('--stop-suspended-instances', dest='stop_suspended_instances',
+                       default=False, help='Stop suspended instances.', action='store_true')
    parser.add_argument('-i', '--instance', dest='instances', type=str,
                        help='Instance to migrate', action='append', required=False)
 
@@ -106,6 +110,9 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
    log_and_print( "Max instances to migrate: " + str(args.max_instances_to_migrate))
    log_and_print("Allow block migration: " + str(args.allow_block_migration))
    log_and_print("Allow live block migration: " + str(args.allow_live_block_migration))
+   log_and_print("Stop paused instances: " + str(args.stop_paused_instances))
+   log_and_print("Stop suspended instances: " + str(args.stop_suspended_instances))
+
    if args.hypervisors == None and args.instances == None:
        failure("You need to specify at least hypervisors or instances")
 
@@ -114,6 +121,8 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
             args.max_instances_to_migrate,
             args.allow_block_migration,
             args.allow_live_block_migration,
+            args.stop_paused_instances,
+            args.stop_suspended_instances,
             args.instances)
 
 def failure(text='Script Failed!', rc=5):
@@ -262,7 +271,7 @@ def coldMigrateInstance(instance):
     failure('The instance ' + instance.id + ' did not get resize_confirmed before this timed out', 33)
 
 
-def migrateInstance(instance, allow_live_block_migration):
+def migrateInstance(instance, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
 
     success = False
     instance_virsh_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
@@ -290,6 +299,30 @@ def migrateInstance(instance, allow_live_block_migration):
            and getattr(instance, 'OS-EXT-STS:vm_state') == 'stopped'
            and getattr(instance, 'OS-EXT-STS:task_state') == None ):
         success = coldMigrateInstance(instance)
+    elif ( instance.status == 'PAUSED'
+           and getattr(instance, 'OS-EXT-STS:power_state') == 3
+           and getattr(instance, 'OS-EXT-STS:vm_state') == 'paused'
+           and getattr(instance, 'OS-EXT-STS:task_state') == None
+           and stop_paused_instances):
+        nova.servers.unpause(instance)
+        # Wait time for instance to unpause 60s (default timeout) + 30s
+        wait_for_instance_status(nova, instance, 'ACTIVE', 90)
+        nova.servers.stop(instance)
+        # Wait time for instance to shutoff 300s (timeout we have before force shutoff) + 30s
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
+        success = coldMigrateInstance(instance)
+    elif ( instance.status == 'SUSPENDED'
+           and getattr(instance, 'OS-EXT-STS:power_state') == 4
+           and getattr(instance, 'OS-EXT-STS:vm_state') == 'suspended'
+           and getattr(instance, 'OS-EXT-STS:task_state') == None
+           and stop_suspended_instances):
+        nova.servers.resume(instance)
+        # Wait time for instance to resume 60s (default timeout) + 30s
+        wait_for_instance_status(nova, instance, 'ACTIVE', 90)
+        nova.servers.stop(instance)
+        # Wait time for instance to shutoff 300s (timeout we have before force shutoff) + 30s
+        wait_for_instance_status(nova, instance, 'SHUTOFF', 330)
+        success = coldMigrateInstance(instance)
     else:
         log_instance_state(instance)
         log_and_print( instance.id + " Instance won't be migrated, because of its status: " +
@@ -299,18 +332,34 @@ def migrateInstance(instance, allow_live_block_migration):
 
     return success
 
-def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration):
+def wait_for_instance_status(nova, instance, desired_status, timeout=60, interval=3):
+    """Wait for the instance to reach the desired status."""
+    start_time = time.time()
+    instance = nova.servers.get(instance.id)
+    log_and_print(instance.id + ' Instance current status: ' + instance.status + '. Setting instance status to ' + desired_status + '.')
+    while True:
+        instance = nova.servers.get(instance.id)
+        if instance.status == desired_status:
+            log_and_print(instance.id + ' Instance is now ' + desired_status + '.')
+            return True
+        elif instance.status == 'ERROR':
+            failure(' ERROR ' + instance.id + ' Instance status: ' + instance.status, 1)
+        elif time.time() - start_time > timeout:
+            failure(' ERROR ' + instance.id + ' Timed out after ' + str(timeout) + ' seconds waiting for the instance to reach ' + desired_status + '. Current status: ' + instance.status, 1)
+        time.sleep(interval)
+
+def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
     instances = getInstances(node, flavors)
     # Create a list of instace uuid from a list of instance objects
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     pprint (allow_live_block_migration)
-    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration)
+    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
     instances = getInstances(node, flavors)
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     log_and_print("Instances still on " + node.hypervisor_hostname + ": " + str(list_of_instance_uuids))
 
 
-def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration):
+def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
     if allow_live_block_migration:
         allow_live_block_migration = None
     pprint("Live block migrate: " + str(allow_live_block_migration))
@@ -332,7 +381,7 @@ def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, 
             continue
         log_instance_state(instance)
         max_instances_to_migrate = max_instances_to_migrate - 1
-        success =  migrateInstance(instance, allow_live_block_migration)
+        success =  migrateInstance(instance, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
         instance = nova.servers.get(instance.id)
         log_instance_state(instance)
         if success and node.hypervisor_hostname == getattr(instance, 'OS-EXT-SRV-ATTR:host'):
@@ -376,19 +425,21 @@ def main(argv=None):
    keystoneclient_v3.Client(session=keystone_session)
    nova = client.Client("2.26", session=keystone_session)
 #   test()
-   (hypervisors, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, instances) = parseCommand()
+   (hypervisors, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, instances) = parseCommand()
    if instances:
         migrateInstances(instances,
                          flavors=[],
                          max_instances_to_migrate=-1,
                          allow_block_migration=allow_block_migration,
-                         allow_live_block_migration=allow_live_block_migration)
+                         allow_live_block_migration=allow_live_block_migration,
+                         stop_paused_instances=stop_paused_instances,
+                         stop_suspended_instances=stop_suspended_instances)
    else:
        nodes = getHypervisorUUID(hypervisors)
        flavor_ids = getFlavorIDs(flavors)
        # This script apperently only drain one node at the time. Note that this might
        # be annoying with max_instances_to_migrate
-       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration)
+       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
 
 print(timeStr() + " Script started, logs will be stored: " + LOGFILE )
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-keystoneauth1==4.2.1 #victoria
-python-keystoneclient==4.1.1 #victoria
-python-novaclient==17.2.1 #victoria
+keystoneauth1==4.3.0 #wallaby
+python-keystoneclient==4.2.0 #wallaby
+python-novaclient==17.3.0 #wallaby
 typing_extensions==4.14.0

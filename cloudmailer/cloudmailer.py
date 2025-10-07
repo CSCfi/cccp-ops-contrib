@@ -635,6 +635,7 @@ def sendMails(send_emails, subject, template, projects):
             for email_address in projects[project]["emails"]:
                 msg = MIMEText(projmail_str)
                 msg["Subject"] = subject
+                msg["From"] = MAIL_FROM
                 msg["To"] = email_address
 #                print(msg)
                 print ("Sending email to: %s" % email_address)
@@ -644,6 +645,7 @@ def sendMails(send_emails, subject, template, projects):
                 for single_mail_bcc in MAIL_BCC.split(","):
                     msg = MIMEText(message_bcc)
                     msg["Subject"] = subject + " - " + projects[project]["name"]
+                    msg["From"] = MAIL_FROM
                     msg['To'] = single_mail_bcc
 #                    print(msg)
                     print ("Sending BCC email to: %s" % single_mail_bcc)

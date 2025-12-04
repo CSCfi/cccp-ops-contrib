@@ -1,4 +1,4 @@
-keystoneauth1==4.3.0 #wallaby
-python-keystoneclient==4.2.0 #wallaby
-python-novaclient==17.3.0 #wallaby
+keystoneauth1==4.4.0 #xena
+python-keystoneclient==4.3.0 #xena
+python-novaclient==17.6.0 #xena
 typing_extensions==4.14.0

@@ -1,4 +1,4 @@
-keystoneauth1==4.4.0 #xena
-python-keystoneclient==4.3.0 #xena
-python-novaclient==17.6.0 #xena
+keystoneauth1==4.5.0 #yoga
+python-keystoneclient==4.4.0 #yoga
+python-novaclient==17.7.0 #yoga
 typing_extensions==4.14.0

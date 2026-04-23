@@ -100,6 +100,8 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
                        default=False, help='Stop suspended instances.', action='store_true')
    parser.add_argument('-i', '--instance', dest='instances', type=str,
                        help='Instance to migrate', action='append', required=False)
+   parser.add_argument('--wait-after-migration', dest='wait_after_migration', type=int,
+                       help='Seconds to wait after each migration', default=20)
 
    flavors = []
    args = parser.parse_args(argv[1:])
@@ -112,9 +114,13 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
    log_and_print("Allow live block migration: " + str(args.allow_live_block_migration))
    log_and_print("Stop paused instances: " + str(args.stop_paused_instances))
    log_and_print("Stop suspended instances: " + str(args.stop_suspended_instances))
+   log_and_print("Seconds to wait after each migration: " + str(args.wait_after_migration))
 
    if args.hypervisors == None and args.instances == None:
        failure("You need to specify at least hypervisors or instances")
+       
+   if args.wait_after_migration < 0:
+       failure("The number to seconds to wait after each migration must be positive")
 
    return ( args.hypervisors,
             flavors,
@@ -123,7 +129,8 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
             args.allow_live_block_migration,
             args.stop_paused_instances,
             args.stop_suspended_instances,
-            args.instances)
+            args.instances,
+            args.wait_after_migration)
 
 def failure(text='Script Failed!', rc=5):
     print( timeStr() + text)
@@ -348,18 +355,18 @@ def wait_for_instance_status(nova, instance, desired_status, timeout=60, interva
             failure(' ERROR ' + instance.id + ' Timed out after ' + str(timeout) + ' seconds waiting for the instance to reach ' + desired_status + '. Current status: ' + instance.status, 1)
         time.sleep(interval)
 
-def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
+def drainHypervisor(node, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, wait_after_migration):
     instances = getInstances(node, flavors)
     # Create a list of instace uuid from a list of instance objects
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     pprint (allow_live_block_migration)
-    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
+    migrateInstances(instances, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, wait_after_migration)
     instances = getInstances(node, flavors)
     list_of_instance_uuids = list(map(lambda x: x.id, instances))
     log_and_print("Instances still on " + node.hypervisor_hostname + ": " + str(list_of_instance_uuids))
 
 
-def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances):
+def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, wait_after_migration):
     if allow_live_block_migration:
         allow_live_block_migration = None
     pprint("Live block migrate: " + str(allow_live_block_migration))
@@ -390,6 +397,10 @@ def migrateInstances(list_of_instance_uuids, flavors, max_instances_to_migrate, 
             log_and_print(str(instance.id) + ' Did not get migrated' )
         else:
             log_and_print(str(instance.id) + ' Seems to have migrated successfully. Success: ' + str(success) )
+        # if we are not in the last migration, sleep for wait_after_migration seconds
+        if i != list_of_instance_uuids[-1]:
+            log_and_print("Waiting for " + str(wait_after_migration) + " seconds before proceeding with next migration")
+            time.sleep(wait_after_migration)
 
 
 def getInstances(host, flavors=None):
@@ -425,7 +436,7 @@ def main(argv=None):
    keystoneclient_v3.Client(session=keystone_session)
    nova = client.Client("2.26", session=keystone_session)
 #   test()
-   (hypervisors, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, instances) = parseCommand()
+   (hypervisors, flavors, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, instances, wait_after_migration) = parseCommand()
    if instances:
         migrateInstances(instances,
                          flavors=[],
@@ -433,13 +444,14 @@ def main(argv=None):
                          allow_block_migration=allow_block_migration,
                          allow_live_block_migration=allow_live_block_migration,
                          stop_paused_instances=stop_paused_instances,
-                         stop_suspended_instances=stop_suspended_instances)
+                         stop_suspended_instances=stop_suspended_instances,
+                         wait_after_migration=wait_after_migration)
    else:
        nodes = getHypervisorUUID(hypervisors)
        flavor_ids = getFlavorIDs(flavors)
        # This script apperently only drain one node at the time. Note that this might
        # be annoying with max_instances_to_migrate
-       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances)
+       drainHypervisor(nodes[0], flavor_ids, max_instances_to_migrate, allow_block_migration, allow_live_block_migration, stop_paused_instances, stop_suspended_instances, wait_after_migration)
 
 print(timeStr() + " Script started, logs will be stored: " + LOGFILE )
 if __name__ == "__main__":

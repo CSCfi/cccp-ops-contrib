@@ -120,7 +120,7 @@ python """ + argv[0] + """ -y host1 -y host2 -y host3""")
        failure("You need to specify at least hypervisors or instances")
        
    if args.wait_after_migration < 0:
-       failure("The number to seconds to wait after each migration must be positive")
+       failure("The number to seconds to wait after each migration must be >=0")
 
    return ( args.hypervisors,
             flavors,
